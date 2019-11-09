@@ -9,13 +9,15 @@
         :accessor key
         :initform nil
         :documentation "Subslot to specify whether a slot is a key.
-                        One of: '(nil, :unique, :index)")))
+                        member of +legal-key-slot-values+")))
 
 
 ;;;; 0. KEYABLE-SLOT section
 
 ;; See: https://stackoverflow.com/questions/30195608/custom-slot-options-dont-apply-any-reduction-to-its-argument
 ;; What happens if a class definition changes? Need to auto-update indexes.
+
+(defparameter +legal-key-slot-values+ '(nil :unique :index))
 
 (defclass keyable-direct-slot (keyable-slot
                                c2mop:standard-direct-slot-definition)
@@ -24,6 +26,12 @@
 (defclass keyable-effective-slot (keyable-slot
                                   c2mop:standard-effective-slot-definition)
   ())
+
+(defmethod initialize-instance :after ((slot keyable-slot) &key)
+  (assert (member (key slot) +legal-key-slot-values+)
+          ((key slot))
+          "Illegal :KEY value for slot specification: ~S"
+          (key slot)))
 
 (defmethod c2mop:direct-slot-definition-class ((class prevalence-class)
                                                &rest initargs)
@@ -106,3 +114,16 @@
     :key :index
     :accessor b))
   (:metaclass prevalence-class))
+
+(defclass tester-class3 (test-class)
+  ((c
+    :initarg :c
+    :key nil
+    :accessor c))
+  (:metaclass prevalence-class))
+
+
+
+
+
+;
