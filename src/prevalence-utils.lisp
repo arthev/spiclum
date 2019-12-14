@@ -11,6 +11,8 @@
         :documentation "Subslot to specify whether a slot is a key.
                         member of +legal-key-slot-values+")))
 
+(defparameter *persisting-p* t
+  "Toggle for whether to persist data or not.")
 
 ;;;; 0. KEYABLE-SLOT section
 
@@ -27,11 +29,17 @@
                                   c2mop:standard-effective-slot-definition)
   ())
 
-(defmethod initialize-instance :after ((slot keyable-slot) &key)
-  (assert (member (key slot) +legal-key-slot-values+)
-          ((key slot))
-          "Illegal :KEY value for slot specification: ~S"
-          (key slot)))
+(defmethod initialize-instance :before ((slot keyable-slot) &key key &allow-other-keys)
+  (assert (member key +legal-key-slot-values+)
+          (key)
+          "Illegal :KEY value for slot specification:~S"
+          key))
+
+(defmethod reinitialize-instance :before ((slot keyable-slot) &key key &allow-other-keys)
+  (assert (member key +legal-key-slot-values+)
+          (key)
+          "Illegal :KEY value for slot specification:~S"
+          key))
 
 (defmethod c2mop:direct-slot-definition-class ((class prevalence-class)
                                                &rest initargs)
@@ -68,17 +76,19 @@
 
 ;;;; 1. PREVALENCE-CLASS section
 
+;; Seems like the main intercessory points are setfing values, instantiating, and reinstatiating (e.g. due to class change/redefinition).
+;; Also seems like we'll need an additional point, to remove instances from the prevalence system.
+
+(defun prevalence-writer (&rest args)
+  (format t "Dummy-writer: ~S" args))
+
+(defun prevalence-insert (&rest args)
+  (format t "Dummy-insert: ~S" args))
+
 (defmethod c2mop:validate-superclass ((class prevalence-class)
                                            (superclass standard-class))
   "Just boilerplate declaring metaclass compatibility."
   t)
-
-
-(defmethod c2mop:slot-value-using-class ((class prevalence-class)
-                                   instance
-                                   slot-name)
-  (format t "Accessing: ~S~%~S~%~S~%" class instance slot-name)
-  (call-next-method))
 
 (defmethod (setf c2mop:slot-value-using-class) (new-value
                                                 (class prevalence-class)
@@ -86,20 +96,32 @@
                                                 slot-name)
   "Responsible for validation, calling the standard-class setf,
    and for making and commiting a transaction."
+  ;; Must both clean up previous system-entry as well as set new entry.
+  ;; And write to the persistence log (potentially).
+
+  ;; Validate the setf input (can we handle this data?)
   (cond ((eq 'standard-class
              (class-name (class-of (class-of new-value))))
          (error "Can't handle ~S since it's often STANDARD-CLASS." new-value))
 
         )
-  (format t "Setting: ~S~%~S~%~S~%~S~%" new-value class instance slot-name)
+
+  ;; TEMP
+  (format t "Setting: ~S~%    ~S~%    ~S~%    ~S~%" new-value class instance slot-name)
+  ;; Pre-check validity of move if slot is :unique. Might need a touch of locking here.
+
   ;; CLHS specifies that setf'ing can return multiple values
   (let ((results (multiple-value-list (call-next-method))))
-    ;; TODO: Make and commit transaction
+    ;; Move instance if indexing slot
+    ;; Make and commit transaction
     (values-list results)))
 
-
-
-
+(defmethod make-instance ((class prevalence-class) &rest initargs &key)
+  (declare (ignorable class initargs))
+  (prog1 (let ((*persisting-p* nil))
+           (call-next-method))
+    ;; Insert into prevalence system w/ neccessary pre-check of validity
+    (apply #'prevalence-writer 'make-instance class initargs)))
 
 (defclass test-class ()
   ((a
