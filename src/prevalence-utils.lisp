@@ -8,13 +8,19 @@
 (defclass prevalence-class (standard-class)
   ()
   (:documentation "Meta-class for persistent objects using prevalence."))
+;; NOTE: Since canonical IDs for each persistent object will be necessary
+;;   to ensure a coherent universe, we have another instance where
+;;   an :allocation :subclass option for a slot would be useful.
+;;   (Of course, we can mimick the effect by including the slot in a wrapper
+;;   macro...)
+;;   But how to handle inheritance amongst the persistent objects?
 
 (defclass keyable-slot (c2mop:standard-slot-definition)
   ((key :initarg :key
         :accessor key
         :initform nil
         :documentation "Subslot to specify whether a slot is a key.
-                        member of +legal-key-slot-values+")))
+                        See KEYABLE-SLOT-KEY.")))
 
 (defparameter *persisting-p* t
   "Toggle for whether to persist (aka serialize and write) data or not.")
@@ -200,22 +206,33 @@
 
 ;;;; 2. PREVALENCE-SYSTEM section
 
-(define-condition non-unique-unique-key (error)
-  ((breach-value
-    :initarg :breach-value
-    :accessor breach-value)
-   (breach-slot
-    :initarg :breach-slot
-    :accessor breach-slot)
-   (breach-class
-    :initarg :breach-slot
-    :accessor breach-class))
-  (:report
-   (lambda (condition stream)
-     (format stream "Uniqueness broken: class ~S, slot ~S, value ~S"
-             (breach-class condition)
-             (breach-slot condition)
-             (breach-value condition))))
+(defclass prevalence-system ()
+  ((lookup-hash
+    :initform (make-hash-table)
+    :reader lookup-hash))
   (:documentation
-   "A condition for use when detecting (potential) breaches
-    of the uniqueness constraint of unique keyable-slots."))
+   "LOOKUP-HASH is a hash by persistent class with hash by slot as value."))
+
+(defvar *prevalence-system* (make-instance 'prevalence-system))
+
+(defun lookup-class-slot (class slot value)
+  "We use class-name and slot-name rather than object,
+   to ease redefinitions."
+  ;; TODO: sanity checking
+  (ignore-errors
+   (gethash value
+            (gethash (c2mop:slot-definition-name slot)
+                     (gethash (class-name class)
+                              (lookup-hash *prevalence-system*))))))
+
+;; Something like this. Perhaps fewer args.
+;; Has to handle a little locking behaviour, though.
+;; Or do we relegate locking behaviour to calling layer? (e.g. setf and similar)
+(defun insert-class-slot (class slot value object)
+  (ccase (key slot)
+    (:unique 'todo)
+    (:index  'todo)
+    ((nil) (cerror "Continue without insertion"
+                   "INSERT-CLASS-SLOT called with class ~S and slot ~S, ~
+                    but ~S is not a key."
+                   class slot))))
