@@ -1,5 +1,7 @@
 (in-package :spiclum)
 
+;; LEGEND: CONSIDER, SEE, TODO
+
 (defclass prevalence-class (standard-class)
   ()
   (:documentation "Meta-class for persistent objects using prevalence."))
@@ -19,7 +21,7 @@
 
 ;;;; 0. KEYABLE-SLOT section
 
-;; See: https://stackoverflow.com/questions/30195608/custom-slot-options-dont-apply-any-reduction-to-its-argument
+;; SEE: https://stackoverflow.com/questions/30195608/custom-slot-options-dont-apply-any-reduction-to-its-argument
 ;; What happens if a class definition changes? Need to auto-update indexes.
 
 (defun %member-of-legal-keyable-slot-key-values (x)
@@ -72,12 +74,44 @@
           (key direct-slot-definition))
     effective-slot-definition))
 
+(defun class-x-key-slots (instance-or-class key-type)
+  "Returns a list of slot objects with KEY-TYPE keys.
+   CONSIDER: Should classes be finalized if not finalized?"
+  (let ((class (if (typep instance-or-class 'standard-class)
+                   instance-or-class
+                   (class-of instance-or-class))))
+    (remove-if-not (lambda (slot)
+                     (and (typep slot 'keyable-slot)
+                          (eq (key slot) key-type)))
+                   (c2mop:class-slots class))))
 
-;; Add a util to get a list of all uniques for a given class/instance
-;; check if a class or not by checking if typep 'standard-class, duh
+(defun class-unique-key-slots (instance-or-class)
+  "Returns a list of slot objects with :unique keys."
+  (class-x-key-slots instance-or-class :unique))
 
+(defun class-index-key-slots (instance-or-class)
+  "Returns a list of slot objects with :index keys."
+  (class-x-key-slots instance-or-class :index))
 
-
+(define-condition non-unique-unique-key (error)
+  ((breach-value
+    :initarg :breach-value
+    :accessor breach-value)
+   (breach-slot
+    :initarg :breach-slot
+    :accessor breach-slot)
+   (breach-class
+    :initarg :breach-slot
+    :accessor breach-class))
+  (:report
+   (lambda (condition stream)
+     (format stream "Uniqueness broken: class ~S, slot ~S, value ~S"
+             (breach-class condition)
+             (breach-slot condition)
+             (breach-value condition))))
+  (:documentation
+   "A condition for use when detecting (potential) breaches
+    of the uniqueness constraint of unique keyable-slots."))
 
 ;;;; 1. PREVALENCE-CLASS section
 
