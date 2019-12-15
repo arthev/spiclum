@@ -200,8 +200,22 @@
 
 ;;;; 2. PREVALENCE-SYSTEM section
 
-;; Make a special condition for handling non-unique uniques, so that
-;; the slot and values etc can be inclued in the condition for convenient
-;; unpacking higher up.
-
-;
+(define-condition non-unique-unique-key (error)
+  ((breach-value
+    :initarg :breach-value
+    :accessor breach-value)
+   (breach-slot
+    :initarg :breach-slot
+    :accessor breach-slot)
+   (breach-class
+    :initarg :breach-slot
+    :accessor breach-class))
+  (:report
+   (lambda (condition stream)
+     (format stream "Uniqueness broken: class ~S, slot ~S, value ~S"
+             (breach-class condition)
+             (breach-slot condition)
+             (breach-value condition))))
+  (:documentation
+   "A condition for use when detecting (potential) breaches
+    of the uniqueness constraint of unique keyable-slots."))
