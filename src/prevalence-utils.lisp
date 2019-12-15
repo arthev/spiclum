@@ -12,14 +12,21 @@
                         member of +legal-key-slot-values+")))
 
 (defparameter *persisting-p* t
-  "Toggle for whether to persist data or not.")
+  "Toggle for whether to persist (aka serialize and write) data or not.")
+
+(defparameter *prevalencing-p* t
+  "Toggle for whether to update the prevalence object store")
 
 ;;;; 0. KEYABLE-SLOT section
 
 ;; See: https://stackoverflow.com/questions/30195608/custom-slot-options-dont-apply-any-reduction-to-its-argument
 ;; What happens if a class definition changes? Need to auto-update indexes.
 
-(defparameter +legal-key-slot-values+ '(nil :unique :index))
+(defun %member-of-legal-keyable-slot-key-values (x)
+  (member x '(nil :unique :index)))
+
+(deftype keyable-slot-key ()
+  '(satisfies %member-of-legal-keyable-slot-key-values))
 
 (defclass keyable-direct-slot (keyable-slot
                                c2mop:standard-direct-slot-definition)
@@ -30,16 +37,10 @@
   ())
 
 (defmethod initialize-instance :before ((slot keyable-slot) &key key &allow-other-keys)
-  (assert (member key +legal-key-slot-values+)
-          (key)
-          "Illegal :KEY value for slot specification:~S"
-          key))
+  (check-type key keyable-slot-key))
 
 (defmethod reinitialize-instance :before ((slot keyable-slot) &key key &allow-other-keys)
-  (assert (member key +legal-key-slot-values+)
-          (key)
-          "Illegal :KEY value for slot specification:~S"
-          key))
+  (check-type key keyable-slot-key))
 
 (defmethod c2mop:direct-slot-definition-class ((class prevalence-class)
                                                &rest initargs)
@@ -72,12 +73,21 @@
     effective-slot-definition))
 
 
+;; Add a util to get a list of all uniques for a given class/instance
+;; check if a class or not by checking if typep 'standard-class, duh
+
+
 
 
 ;;;; 1. PREVALENCE-CLASS section
 
 ;; Seems like the main intercessory points are setfing values, instantiating, and reinstatiating (e.g. due to class change/redefinition).
 ;; Also seems like we'll need an additional point, to remove instances from the prevalence system.
+
+(defmacro with-ignored-prevalence (&rest body)
+  `(let ((*persisting-p* nil)
+         (*prevalencing-p* nil))
+     ,@body))
 
 (defun prevalence-writer (&rest args)
   (format t "Dummy-writer: ~S" args))
@@ -118,10 +128,12 @@
 
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)
   (declare (ignorable class initargs))
-  (prog1 (let ((*persisting-p* nil))
-           (call-next-method))
-    ;; Insert into prevalence system w/ neccessary pre-check of validity
-    (apply #'prevalence-writer 'make-instance class initargs)))
+  ;; Pre-check uniques for basic sanity
+  (let ((instance (with-ignored-prevalence (call-next-method))))
+    ;; Insert into prevalence system w/ neccessary checks in that
+    ;; Serialize and persist
+    (apply #'prevalence-writer 'make-instance class initargs)
+    instance))
 
 (defclass test-class ()
   ((a
@@ -145,7 +157,10 @@
   (:metaclass prevalence-class))
 
 
+;;;; 2. PREVALENCE-SYSTEM section
 
-
+;; Make a special condition for handling non-unique uniques, so that
+;; the slot and values etc can be inclued in the condition for convenient
+;; unpacking higher up.
 
 ;
