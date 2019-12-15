@@ -1,5 +1,8 @@
 (in-package :spiclum)
 
+;; Note: avoid locks on disk accesses. Perhaps enqueue all logging onto a
+;;   single-thread?
+
 ;; LEGEND: CONSIDER, SEE, TODO
 
 (defclass prevalence-class (standard-class)
@@ -21,9 +24,6 @@
 
 ;;;; 0. KEYABLE-SLOT section
 
-;; SEE: https://stackoverflow.com/questions/30195608/custom-slot-options-dont-apply-any-reduction-to-its-argument
-;; What happens if a class definition changes? Need to auto-update indexes.
-
 (defun %member-of-legal-keyable-slot-key-values (x)
   (member x '(nil :unique :index)))
 
@@ -39,9 +39,13 @@
   ())
 
 (defmethod initialize-instance :before ((slot keyable-slot) &key key &allow-other-keys)
+  "The MOP standard precludes portable programs from writing methods on
+   SHARED-INITIALIZE, thus the duplication with REINITIALIZE-INSTANCE."
   (check-type key keyable-slot-key))
 
 (defmethod reinitialize-instance :before ((slot keyable-slot) &key key &allow-other-keys)
+  "The MOP standard precludes portable programs from writing methods on
+   SHARED-INITIALIZE, thus the duplication with INITIALIZE-INSTANCE."
   (check-type key keyable-slot-key))
 
 (defmethod c2mop:direct-slot-definition-class ((class prevalence-class)
@@ -133,6 +137,9 @@
                                            (superclass standard-class))
   "Just boilerplate declaring metaclass compatibility."
   t)
+
+;; To avoid problems with circularities, one option is to lazy up slots with
+;; persistent objects as values, and then force them during lookup.
 
 (defmethod (setf c2mop:slot-value-using-class) (new-value
                                                 (class prevalence-class)
