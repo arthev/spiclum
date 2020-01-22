@@ -78,7 +78,7 @@
   (find-class 'keyable-direct-slot))
 
 (defmethod c2mop:effective-slot-definition-class ((class prevalence-class)
-                                               &rest initargs)
+                                                  &rest initargs)
   "Efficiency here could possibly be increased by checking whether
    a normal slot would suffice, by analyzing INITARGS. Complicates
    both this method and COMPUTE-EFFECTIVE-SLOT-DEFINITION, however."
@@ -157,7 +157,7 @@
   (format t "Dummy-insert: ~S" args))
 
 (defmethod c2mop:validate-superclass ((class prevalence-class)
-                                           (superclass standard-class))
+                                      (superclass standard-class))
   "Just boilerplate declaring metaclass compatibility."
   t)
 
@@ -200,10 +200,9 @@
     ((metaclass (eql (find-class 'prevalence-class))) new-value)
   t)
 
-(defun guarded-slot-value-using-class (class instance slot-name)
-  (break)
-  (if (slot-boundp instance slot-name)
-      (values (c2mop:slot-value-using-class class instance slot-name)
+(defun guarded-slot-value-using-class (class instance slotd)
+  (if (slot-boundp instance (c2mop:slot-definition-name slotd))
+      (values (c2mop:slot-value-using-class class instance slotd)
               t)
       (values nil
               nil)))
@@ -211,12 +210,12 @@
 (defmethod (setf c2mop:slot-value-using-class) (new-value
                                                 (class prevalence-class)
                                                 instance
-                                                slot-name)
+                                                slotd)
   "Responsible for validation, calling the standard-class setf,
    and for making and commiting a transaction."
   (assert (acceptable-persistent-slot-value-type-p new-value))
   (multiple-value-bind (old-value slot-boundp)
-      (guarded-slot-value-using-class class instance slot-name)
+      (guarded-slot-value-using-class class instance slotd)
     (let (;; CLHS specifies that setf'ing can return multiple values
           (results (multiple-value-list (call-next-method)))
           (prevalenced-p nil)
