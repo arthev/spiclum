@@ -28,6 +28,21 @@
 (defparameter *prevalencing-p* t
   "Toggle for whether to update the prevalence object store")
 
+;;;; -1. Helpers
+
+(defun class-metaobject-p (obj)
+  (let ((class-groups '(standard-class built-in-class structure-class)))
+    (some (lfix #'typep obj) class-groups)))
+
+(defun metaclass-of (obj)
+  "Returns the metaclass of OBJ as primarily value.
+   Returns a secondary value indicating whether obj
+   was a class-object (T) or not (nil).
+   Probably assumes no metaclasses have metaclasses."
+  (if (class-metaobject-p obj)
+      (values (class-of obj) t)
+      (values (class-of (class-of obj)) nil)))
+
 ;;;; 0. KEYABLE-SLOT section
 
 (defun %member-of-legal-keyable-slot-key-values (x)
@@ -125,8 +140,10 @@
 
 ;;;; 1. PREVALENCE-CLASS section
 
-;; Seems like the main intercessory points are setfing values, instantiating, and reinstatiating (e.g. due to class change/redefinition).
-;; Also seems like we'll need an additional point, to remove instances from the prevalence system.
+;; Seems like the main intercessory points are setfing values, instantiating,
+;; and reinstatiating (e.g. due to class change/redefinition).
+;; Also seems like we'll need an additional point,
+;; to remove instances from the prevalence system.
 
 (defmacro with-ignored-prevalence (&rest body)
   `(let ((*persisting-p* nil)
@@ -146,6 +163,36 @@
 
 ;; To avoid problems with circularities, one option is to lazy up slots with
 ;; persistent objects as values, and then force them during lookup.
+;; E.g. when serializing, serialize through lazy wrapper.
+;; Can then either:
+;; a) force during slot lookup (constant overhead)
+;; b) force all during initialization (slower initialization)
+
+;; Atomic setf for if multiple setfs are part of a transaction,
+;; so if we are persisting-p or prevalencing-p can be trusted.
+
+(defun acceptable-persistent-slot-value-type-p (new-value)
+  (%acceptable-persistent-slot-value-type-p (metaclass-of new-value) new-value))
+
+(defgeneric %acceptable-persistent-slot-value-type-p (metaclass new-value)
+  (:documentation "Predicate to determine whether NEW-VALUE can be stored
+   as a persistent slot value. Exported for further user specification.
+   Of course, if something can be stored, it must be (de)serializable as well."))
+
+(defmethod %acceptable-persistent-slot-value-type-p ((metaclass standard-class) new-value)
+  (error "Can't use ~S as slot-value for persistent object, since it's metaclass ~S"
+         new-value metaclass))
+
+(defmethod %acceptable-persistent-slot-value-type-p ((metaclass structure-class) new-value)
+  (error "Can't use ~S as slot-value for persistent object, since it's metaclass ~S"
+         new-value metaclass))
+
+(defmethod %acceptable-persistent-slot-value-type-p ((metaclass built-in-class) new-value)
+  t)
+
+(defmethod %acceptable-persistent-slot-value-type-p ((metaclass prevalence-class) new-value)
+  t)
+
 
 (defmethod (setf c2mop:slot-value-using-class) (new-value
                                                 (class prevalence-class)
@@ -156,47 +203,50 @@
   ;; Must both clean up previous system-entry as well as set new entry.
   ;; And write to the persistence log (potentially).
 
-  ;; Validate the setf input (can we handle this data?)
-  (cond ((eq 'standard-class
-             (class-name (class-of (class-of new-value))))
-         (error "Can't handle ~S since it's often STANDARD-CLASS." new-value))
-
-        )
+  (acceptable-persistent-slot-value-type-p new-value) ; Provisional
 
   ;; TEMP
   (format t "Setting: ~S~%    ~S~%    ~S~%    ~S~%" new-value class instance slot-name)
   ;; Pre-check validity of move if slot is :unique. Might need a touch of locking here.
 
-  ;; CLHS specifies that setf'ing can return multiple values
-  (let ((results (multiple-value-list (call-next-method))))
+  ;; TODO: Naive! Slot might be unbound. We'll need some sort of sentinel for that,
+  ;; along with making the slot unbound again in the case of an error.
+  (let ((old-value (c2mop:slot-value-using-class class instance slot-name))
+        ;; CLHS specifies that setf'ing can return multiple values
+        (results (multiple-value-list (call-next-method))))
+    (ecase (key slot-name)
+      (:unique (format t "UNIQUE KEY DETECTED~%"))
+      (:index  (format t "INDEX  KEY DETECTED~%"))
+      ((nil)   (format t "NIL    KEY DETECTED~%")))
+
     ;; Move instance if indexing slot
     ;; Make and commit transaction
     (values-list results)))
 
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)
   (declare (ignorable class initargs))
-  ;; Pre-check uniques for basic sanity
   (let ((instance (with-ignored-prevalence (call-next-method))))
-    ;; Insert into prevalence system w/ neccessary checks in that
-    ;; Serialize and persist
+    ;; Can probably lock here, check all uniques,
+    ;; insert for uniques. Insert for indexes after.
+    ;; Then serialize/persist.
     (apply #'prevalence-writer 'make-instance class initargs)
     instance))
 
-(defclass test-class ()
+(defclass ptest-class ()
   ((a
     :initarg :a
     :key :unique
     :accessor a))
   (:metaclass prevalence-class))
 
-(defclass tester-class2 (test-class)
+(defclass ptester-class2 (test-class)
   ((b
     :initarg :b
     :key :index
     :accessor b))
   (:metaclass prevalence-class))
 
-(defclass tester-class3 (test-class)
+(defclass ptester-class3 (test-class)
   ((c
     :initarg :c
     :key nil
