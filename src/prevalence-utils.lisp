@@ -171,6 +171,10 @@
 ;; Atomic setf for if multiple setfs are part of a transaction,
 ;; so if we are persisting-p or prevalencing-p can be trusted.
 
+
+;; Gotta rethink this section, doesn't work correctly (e.g. calling it with
+;; 5 as NEW-VALUE leads to the standard-class specializing one
+
 (defun acceptable-persistent-slot-value-type-p (new-value)
   (%acceptable-persistent-slot-value-type-p (metaclass-of new-value) new-value))
 
@@ -193,6 +197,13 @@
 (defmethod %acceptable-persistent-slot-value-type-p ((metaclass prevalence-class) new-value)
   t)
 
+(defun guarded-slot-value-using-class (class instance slot-name)
+  (break)
+  (if (slot-boundp instance slot-name)
+      (values (c2mop:slot-value-using-class class instance slot-name)
+              t)
+      (values nil
+              nil)))
 
 (defmethod (setf c2mop:slot-value-using-class) (new-value
                                                 (class prevalence-class)
@@ -200,28 +211,25 @@
                                                 slot-name)
   "Responsible for validation, calling the standard-class setf,
    and for making and commiting a transaction."
-  ;; Must both clean up previous system-entry as well as set new entry.
-  ;; And write to the persistence log (potentially).
-
-  (acceptable-persistent-slot-value-type-p new-value) ; Provisional
-
-  ;; TEMP
-  (format t "Setting: ~S~%    ~S~%    ~S~%    ~S~%" new-value class instance slot-name)
-  ;; Pre-check validity of move if slot is :unique. Might need a touch of locking here.
-
-  ;; TODO: Naive! Slot might be unbound. We'll need some sort of sentinel for that,
-  ;; along with making the slot unbound again in the case of an error.
-  (let ((old-value (c2mop:slot-value-using-class class instance slot-name))
-        ;; CLHS specifies that setf'ing can return multiple values
-        (results (multiple-value-list (call-next-method))))
-    (ecase (key slot-name)
-      (:unique (format t "UNIQUE KEY DETECTED~%"))
-      (:index  (format t "INDEX  KEY DETECTED~%"))
-      ((nil)   (format t "NIL    KEY DETECTED~%")))
-
-    ;; Move instance if indexing slot
-    ;; Make and commit transaction
-    (values-list results)))
+  (assert (acceptable-persistent-slot-value-type-p new-value))
+  (multiple-value-bind (old-value slot-boundp)
+      (guarded-slot-value-using-class class instance slot-name)
+    (let (;; CLHS specifies that setf'ing can return multiple values
+          (results (multiple-value-list (call-next-method)))
+          (prevalenced-p nil)
+          (persisted-p   nil))
+      (unwind-protect
+           (progn
+             '|prevalence-(lock)|
+             (setf prevalenced-p t)
+             '|persist-(lock)|
+             (setf persisted-p t)
+             '|remove-from-old-slot-index-(lock)|
+             (values-list results))
+        (when prevalenced-p
+          '|undo-the-move|)
+        (when persisted-p
+          '|persist-reverse?|)))))
 
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)
   (declare (ignorable class initargs))
