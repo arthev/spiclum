@@ -172,9 +172,6 @@
 ;; so if we are persisting-p or prevalencing-p can be trusted.
 
 
-;; Gotta rethink this section, doesn't work correctly (e.g. calling it with
-;; 5 as NEW-VALUE leads to the standard-class specializing one
-
 (defun acceptable-persistent-slot-value-type-p (new-value)
   (%acceptable-persistent-slot-value-type-p (metaclass-of new-value) new-value))
 
@@ -183,18 +180,24 @@
    as a persistent slot value. Exported for further user specification.
    Of course, if something can be stored, it must be (de)serializable as well."))
 
-(defmethod %acceptable-persistent-slot-value-type-p ((metaclass standard-class) new-value)
-  (error "Can't use ~S as slot-value for persistent object, since it's metaclass ~S"
+(defmethod %acceptable-persistent-slot-value-type-p
+    ((metaclass (eql (find-class 'standard-class))) new-value)
+  (error "Can't use ~S as slot-value for persistent object,~%~
+          since it's metaclass ~S"
          new-value metaclass))
 
-(defmethod %acceptable-persistent-slot-value-type-p ((metaclass structure-class) new-value)
-  (error "Can't use ~S as slot-value for persistent object, since it's metaclass ~S"
+(defmethod %acceptable-persistent-slot-value-type-p
+    ((metaclass (eql (find-class 'structure-class))) new-value)
+  (error "Can't use ~S as slot-value for persistent object,~%~
+          since it's metaclass ~S"
          new-value metaclass))
 
-(defmethod %acceptable-persistent-slot-value-type-p ((metaclass built-in-class) new-value)
+(defmethod %acceptable-persistent-slot-value-type-p
+    ((metaclass (eql (find-class 'built-in-class))) new-value)
   t)
 
-(defmethod %acceptable-persistent-slot-value-type-p ((metaclass prevalence-class) new-value)
+(defmethod %acceptable-persistent-slot-value-type-p
+    ((metaclass (eql (find-class 'prevalence-class))) new-value)
   t)
 
 (defun guarded-slot-value-using-class (class instance slot-name)
