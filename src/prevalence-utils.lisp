@@ -15,6 +15,7 @@
 ;;   macro...)
 ;;   But how to handle inheritance amongst the persistent objects?
 
+;; TODO: Add hash-table comparison function slot to the keyable-slots
 (defclass keyable-slot (c2mop:standard-slot-definition)
   ((key :initarg :key
         :accessor key
@@ -27,6 +28,21 @@
 
 (defparameter *prevalencing-p* t
   "Toggle for whether to update the prevalence object store")
+
+;;;; -2. Malplaced Helpers
+
+(defmacro with-recursive-locks (locks &body body)
+  `(call-with-recursive-locks
+    (sort ,locks #'string< :key #'sb-thread:mutex-name)
+    (lambda () ,@body)))
+
+(defun call-with-recursive-locks (locks body)
+  (labels ((internal (locks)
+             (if (endp locks)
+                 (funcall body)
+                 (bt:with-recursive-lock-held ((car locks))
+                   (internal (cdr locks))))))
+    (internal locks)))
 
 ;;;; -1. Helpers
 
@@ -236,11 +252,72 @@
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)
   (declare (ignorable class initargs))
   (let ((instance (with-ignored-prevalence (call-next-method))))
-    ;; Can probably lock here, check all uniques,
-    ;; insert for uniques. Insert for indexes after.
-    ;; Then serialize/persist.
-    (apply #'prevalence-writer 'make-instance class initargs)
+    '|prevalence-for-all-slots-(lock)|
+    '|persist-(lock): 'make-instance class initargs|
     instance))
+
+
+
+;;;; 2. PREVALENCE-SYSTEM section
+
+;; The "canonical" lookup is on the unique IDs, so those are
+;; also the lookups we can iterate to persist the whole store.
+
+(defclass prevalence-system ()
+  ((hash-store
+    :initform (make-hash-table)
+    :reader hash-store))
+  (:documentation
+   "HASH-STORE is a hash by persistent class with hash by slot as value."))
+
+(defvar *prevalence-system* (make-instance 'prevalence-system))
+
+(defun prevalence-lookup-class-slot (class slotd value)
+  "Takes a prevalence CLASS and a SLOTD object, as well as a VALUE,
+   and looks up the relevant entries. The keys in the PREVALENCE-SYSTEM
+   HASH-STORE are the names of the class and slot, however, to ease
+   redefinitions."
+  (handler-bind ((type-error
+                   (lambda (condition)
+                     (when (and (eq nil (type-error-datum condition))
+                                (eq 'hash-table (type-error-expected-type condition)))
+                       (return-from prevalence-lookup-class-slot nil)))))
+    (gethash value
+             (gethash (c2mop:slot-definition-name slotd)
+                      (gethash (class-name class)
+                               (hash-store *prevalence-system*))))))
+
+(defun prevalence-insert-class-slot (class slotd value object)
+  (when (key slotd)
+    (ccase (key slot)
+      (:unique (with-recursive-locks (prevalence-slot-locks class slotd)
+                 (if (prevalence-lookup-class-slot class slotd value)
+                     (error "hecking heck")
+                     (setf (prevalence-lookup-class-slot class slotd value) object))))
+      (:index  (with-recursive-locks (prevalence-slot-locks class slotd)
+                 (pushnew object
+                          (prevalence-lookup-class-slot class slotd value)
+                          :test (test slotd)))))))
+
+(defun prevalence-remove-class-slots (class slotd value object)
+  ;; Since insertion uses pushnew for :index,
+  ;; we perhaps ought to remove from the back...
+  'todo)
+
+(defun prevalence-slot-locks (class &rest slotds)
+  "Returns a sorted list of locks associated with the CLASS and SLOTDS."
+  'todo)
+
+
+
+
+
+
+
+
+
+
+;;;; Z. Dumb convenience section
 
 (defclass ptest-class ()
   ((a
@@ -262,37 +339,3 @@
     :key nil
     :accessor c))
   (:metaclass prevalence-class))
-
-
-;;;; 2. PREVALENCE-SYSTEM section
-
-(defclass prevalence-system ()
-  ((lookup-hash
-    :initform (make-hash-table)
-    :reader lookup-hash))
-  (:documentation
-   "LOOKUP-HASH is a hash by persistent class with hash by slot as value."))
-
-(defvar *prevalence-system* (make-instance 'prevalence-system))
-
-(defun lookup-class-slot (class slot value)
-  "We use class-name and slot-name rather than object,
-   to ease redefinitions."
-  ;; TODO: sanity checking
-  (ignore-errors
-   (gethash value
-            (gethash (c2mop:slot-definition-name slot)
-                     (gethash (class-name class)
-                              (lookup-hash *prevalence-system*))))))
-
-;; Something like this. Perhaps fewer args.
-;; Has to handle a little locking behaviour, though.
-;; Or do we relegate locking behaviour to calling layer? (e.g. setf and similar)
-(defun insert-class-slot (class slot value object)
-  (ccase (key slot)
-    (:unique 'todo)
-    (:index  'todo)
-    ((nil) (cerror "Continue without insertion"
-                   "INSERT-CLASS-SLOT called with class ~S and slot ~S, ~
-                    but ~S is not a key."
-                   class slot))))
