@@ -13,15 +13,40 @@
 ;;   an :allocation :subclass option for a slot would be useful.
 ;;   (Of course, we can mimick the effect by including the slot in a wrapper
 ;;   macro...)
-;;   But how to handle inheritance amongst the persistent objects?
 
-;; TODO: Add hash-table comparison function slot to the keyable-slots
+;; But how to handle inheritance amongst the persistent objects?
+;; Just provide a query that specifies whether to look for the
+;; explicit class, or the class and its subclasses, duh.
+
+;; Uh-oh. How to handle uniqueness for subclasses of a class?
+;; Say we have an unique email, but we have more than one type of
+;; user class (all inheriting from a root class).
+;; Do we need :class-unique versus :precedence-unique?
+;; What if there's mix-ins. :precedence-unique now behaves slightly weird.
+
+;; Even worse, mix-ins don't *have* to share metaclass, even!
+;; One possibility is to forbid non-shared metaclass inheritance.
+;; Can be checked during definining a class, obviously.
+;; The other option is to allow it, but then we have to filter for
+;; a lot of stuff...
+;; Can probably disallow for the time being (or design as if disallowed),
+;; because it'll give immediate errors if tried unless those filters are
+;; in place.
+
 (defclass keyable-slot (c2mop:standard-slot-definition)
-  ((key :initarg :key
-        :accessor key
-        :initform nil
-        :documentation "Subslot to specify whether a slot is a key.
-                        See KEYABLE-SLOT-KEY.")))
+  ((key
+    :initarg :key
+    :accessor key
+    :initform nil
+    :documentation
+    "Subslot to specify whether a slot is a key. See KEYABLE-SLOT-KEY.")
+   (equality
+    :initarg :key
+    :accessor equality
+    :initform #'eql
+    :documentation
+    "Subslot to specify how to compare valus of the slot for equality.
+    Used by the prevalence system's hash-tables.")))
 
 (defparameter *persisting-p* t
   "Toggle for whether to persist (aka serialize and write) data or not.")
@@ -32,11 +57,14 @@
 ;;;; -2. Malplaced Helpers
 
 (defmacro with-recursive-locks (locks &body body)
+  "Non-portable: bordeaux-threads doesn't support lock-name lookup."
   `(call-with-recursive-locks
     (sort ,locks #'string< :key #'sb-thread:mutex-name)
     (lambda () ,@body)))
 
 (defun call-with-recursive-locks (locks body)
+  "Probably inefficient compared with acquire-recursive-lock.
+   But bordeaux-threads don't support that for sbcl."
   (labels ((internal (locks)
              (if (endp locks)
                  (funcall body)
@@ -176,6 +204,13 @@
                                       (superclass standard-class))
   "Just boilerplate declaring metaclass compatibility."
   t)
+
+;; TODO: Does c2mop:validate-superclass standard-class prevalence-class
+;; make sense? Then someone can make a normal class inheriting from a
+;; persistent one. What's the damage? Potentially weird behaviour and
+;; slowness, I suppose. But if someone chooses to do that, the presumption
+;; is that they know what they're doing, no?
+
 
 ;; To avoid problems with circularities, one option is to lazy up slots with
 ;; persistent objects as values, and then force them during lookup.
