@@ -75,6 +75,8 @@
                    (internal (cdr locks))))))
     (internal locks)))
 
+;; a get/ensure-hash-table sounds like a good abstractio
+
 ;;;; -1. Helpers
 
 (defun metaclass-of (obj)
@@ -173,7 +175,7 @@
     :initarg :breach-slot
     :accessor breach-slot)
    (breach-class
-    :initarg :breach-slot
+    :initarg :breach-class
     :accessor breach-class))
   (:report
    (lambda (condition stream)
@@ -263,14 +265,16 @@
     (let (;; CLHS specifies that setf'ing can return multiple values
           (results (multiple-value-list (call-next-method)))
           (prevalenced-p nil)
-          (persisted-p   nil))
+          (persisted-p   nil)
+          (removed-p     nil))
       (unwind-protect
            (progn
-             '|prevalence-(lock)|
+             (prevalence-insert-class-slot class slotd new-value instance)
              (setf prevalenced-p t)
              '|persist-(lock)|
              (setf persisted-p t)
              '|remove-from-old-slot-index-(lock)|
+             (setf removed-p t)
              (values-list results))
         (when prevalenced-p
           '|undo-the-move|)
@@ -321,23 +325,42 @@
                       (gethash (class-name class)
                                (hash-store *prevalence-system*))))))
 
-(defun prevalence-insert-class-slot (class slotd value object)
-  (when (key slotd)
-    (ccase (key slotd)
-      (:class-unique
-       (with-recursive-locks (prevalence-slot-locks class slotd)
-         (if (prevalence-lookup-class-slot class slotd value)
-             (error "hecking heck")
-             (setf (prevalence-lookup-class-slot class slotd value) object))))
-      ;; TODO: Add branch for precedence-unique
-      (:index
-       ;; TODO: This needs to use find-slot-defining-class
-       (with-recursive-locks (prevalence-slot-locks class slotd)
-         (pushnew object
-                  (prevalence-lookup-class-slot class slotd value)))))))
+(defun (setf prevalence-lookup-class-slot) (new-value class slotd value)
+  "Sets the appropriate nested hash-lookup value,
+   creating new tables as necessary."
+  (let* ((class-table (gethash (class-name class)
+                               (hash-store *prevalence-system*)))
+         (slot-table (ignore-errors (gethash (c2mop:slot-definition-name slotd) class-table))))
+    (unless class-table
+      (setf (gethash (class-name class) (hash-store *prevalence-system*))
+            (setf class-table (make-hash-table))))
+    (unless slot-table
+      (setf (gethash (c2mop:slot-definition-name slotd) class-table)
+            (setf slot-table (make-hash-table :test (equality slotd)))))
+    (setf (gethash value slot-table) new-value)))
 
-;; TODO: gotta use the equaliy test when generating the hashtables
-;; in the object store, for the given slot. (equality slotd)
+(defun prevalence-insert-class-slot (class slotd value object)
+  (ccase (key slotd)
+    (:class-unique
+     (with-recursive-locks (prevalence-slot-locks class slotd)
+       (if (prevalence-lookup-class-slot class slotd value)
+           (error 'non-unique-unique-key
+                  :breach-class class :breach-slot slotd :breach-value value)
+           (setf (prevalence-lookup-class-slot class slotd value) object))))
+    (:precedence-unique
+     (with-recursive-locks (prevalence-slot-locks class slotd)
+       (let ((slot-defining-class (find-slot-defining-class class slotd)))
+         (if (prevalence-lookup-class-slot slot-defining-class slotd value)
+             (error 'non-unique-unique-key
+                    :breach-class class :breach-slot slotd :breach-value value)
+             (setf (prevalence-lookup-class-slot slot-defining-class slotd value) object)))))
+    (:index
+     (with-recursive-locks (prevalence-slot-locks class slotd)
+       (pushnew object
+                (prevalence-lookup-class-slot (find-slot-defining-class class slotd)
+                                              slotd
+                                              value))))
+    ((nil) :do-nothing)))
 
 (defun prevalence-remove-class-slots (class slotd value object)
   ;; Since insertion uses pushnew for :index,
@@ -346,16 +369,23 @@
 
 (defun prevalence-slot-locks (class &rest slotds)
   "Returns a sorted list of locks associated with the CLASS and SLOTDS."
-  (mapcar (lambda (slotd)
-            ;; TODO: (ccase (key slotd)
-            (let ((slot-defining-class (find-slot-defining-class class slotd)))
-              (assert slot-defining-class)
-              (prevalence-lookup-lock (class-name slot-defining-class)
-                                      (c2mop:slot-definition-name slotd))))
-          slotds))
+  (flet ((lock-for-slot-defining-class (slotd)
+           (let ((slot-defining-class (find-slot-defining-class class slotd)))
+             (assert slot-defining-class)
+             (prevalence-lookup-lock (class-name slot-defining-class)
+                                     (c2mop:slot-definition-name slotd)))))
+    (mapcar (lambda (slotd)
+              (ccase (key slotd)
+                (:class-unique (prevalence-lookup-lock (class-name class)
+                                                       (c2mop:slot-definition-name slotd)))
+                (:index (lock-for-slot-defining-class slotd))
+                (:precedence-unique (lock-for-slot-defining-class slotd))))
+            slotds)))
 
 (defun find-slot-defining-class (class slotd)
   ;; TODO: Evaluate if we have to finalize classes.
+  ;; TODO: Check the MOP book to see if this is proper behaviour.
+  ;; ALSO if we need to mark nodes to avoid infinite recursion.
   (cond ((null class)
          nil)
         ((find-if (rfix #'direct-effective-slot-equivalence slotd)
@@ -395,19 +425,6 @@
                                            *prevalence-system* class-name slot-name)))))
            (prevalence-lookup-lock class-name slot-name))
           (t lock))))
-
-
-
-
-
-
-(defun prevalence-writer (&rest args)
-  (format t "Dummy-writer: ~S" args))
-
-(defun prevalence-insert (&rest args)
-  (format t "Dummy-insert: ~S" args))
-
-
 
 ;;;; Z. Dumb convenience section
 
