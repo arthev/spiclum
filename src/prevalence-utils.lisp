@@ -77,18 +77,12 @@
 
 ;;;; -1. Helpers
 
-(defun class-metaobject-p (obj)
-  "Reimplements c2mop:classp due to programmer ignorance."
-  ;; TODO: Remove this because see above.
-  (let ((class-groups '(standard-class built-in-class structure-class)))
-    (some (lfix #'typep obj) class-groups)))
-
 (defun metaclass-of (obj)
   "Returns the metaclass of OBJ as primarily value.
    Returns a secondary value indicating whether obj
    was a class-object (T) or not (nil).
    Probably assumes no metaclasses have metaclasses."
-  (if (class-metaobject-p obj)
+  (if (c2mop:classp obj)
       (values (class-of obj) t)
       (values (class-of (class-of obj)) nil)))
 
@@ -151,7 +145,7 @@
 (defun class-x-key-slots (instance-or-class key-type)
   "Returns a list of slot objects with KEY-TYPE keys.
    CONSIDER: Should classes be finalized if not finalized?"
-  (let ((class (if (class-metaobject-p instance-or-class)
+  (let ((class (if (c2mop:classp instance-or-class)
                    instance-or-class
                    (class-of instance-or-class))))
     (remove-if-not (lambda (slot)
