@@ -1,8 +1,5 @@
 (in-package :spiclum)
 
-;; Note: avoid locks on disk accesses. Perhaps enqueue all logging onto a
-;;   single-thread?
-
 ;; LEGEND: CONSIDER, SEE, TODO
 
 (defclass prevalence-class (standard-class)
@@ -13,6 +10,10 @@
 ;;   an :allocation :subclass option for a slot would be useful.
 ;;   (Of course, we can mimick the effect by including the slot in a wrapper
 ;;   macro...)
+
+;; We can use some 'forbidden changes' signifier or something to react by refusing
+;; to re-setf any sch primary canonical ID slots, perhaps. Either they must be static,
+;; or we ust be able to register dependents in case of changes.
 
 ;; But how to handle inheritance amongst the persistent objects?
 ;; Just provide a query that specifies whether to look for the
@@ -32,6 +33,8 @@
 ;; Can probably disallow for the time being (or design as if disallowed),
 ;; because it'll give immediate errors if tried unless those filters are
 ;; in place.
+
+;; Uh-oh. How to handle :class allocated slots?
 
 (defclass keyable-slot (c2mop:standard-slot-definition)
   ((key
@@ -75,6 +78,8 @@
 ;;;; -1. Helpers
 
 (defun class-metaobject-p (obj)
+  "Reimplements c2mop:classp due to programmer ignorance."
+  ;; TODO: Remove this because see above.
   (let ((class-groups '(standard-class built-in-class structure-class)))
     (some (lfix #'typep obj) class-groups)))
 
@@ -90,7 +95,7 @@
 ;;;; 0. KEYABLE-SLOT section
 
 (defun %member-of-legal-keyable-slot-key-values (x)
-  (member x '(nil :unique :index)))
+  (member x '(nil :precedence-unique :class-unique :index)))
 
 (deftype keyable-slot-key ()
   '(satisfies %member-of-legal-keyable-slot-key-values))
@@ -146,7 +151,7 @@
 (defun class-x-key-slots (instance-or-class key-type)
   "Returns a list of slot objects with KEY-TYPE keys.
    CONSIDER: Should classes be finalized if not finalized?"
-  (let ((class (if (typep instance-or-class 'standard-class)
+  (let ((class (if (class-metaobject-p instance-or-class)
                    instance-or-class
                    (class-of instance-or-class))))
     (remove-if-not (lambda (slot)
@@ -155,12 +160,16 @@
                    (c2mop:class-slots class))))
 
 (defun class-unique-key-slots (instance-or-class)
-  "Returns a list of slot objects with :unique keys."
-  (class-x-key-slots instance-or-class :unique))
+  "Returns a list of slot objects with :class-unique keys."
+  (class-x-key-slots instance-or-class :class-unique))
 
-(defun class-index-key-slots (instance-or-class)
+(defun index-key-slots (instance-or-class)
   "Returns a list of slot objects with :index keys."
   (class-x-key-slots instance-or-class :index))
+
+(defun precedence-unique-key-slots (instance-or-class)
+  "Returns a list of slot objects with :precedence-unique keys"
+  (class-x-key-slots instance-or-class :precedence-unique))
 
 (define-condition non-unique-unique-key (error)
   ((breach-value
@@ -194,23 +203,13 @@
          (*prevalencing-p* nil))
      ,@body))
 
-(defun prevalence-writer (&rest args)
-  (format t "Dummy-writer: ~S" args))
-
-(defun prevalence-insert (&rest args)
-  (format t "Dummy-insert: ~S" args))
-
 (defmethod c2mop:validate-superclass ((class prevalence-class)
                                       (superclass standard-class))
   "Just boilerplate declaring metaclass compatibility."
   t)
 
-;; TODO: Does c2mop:validate-superclass standard-class prevalence-class
-;; make sense? Then someone can make a normal class inheriting from a
-;; persistent one. What's the damage? Potentially weird behaviour and
-;; slowness, I suppose. But if someone chooses to do that, the presumption
-;; is that they know what they're doing, no?
-
+;; TODO: If we decide to allow mixins, then we probably
+;; want to validate the reverse of the above too. (On a 'caveat emptor' basis.)
 
 ;; To avoid problems with circularities, one option is to lazy up slots with
 ;; persistent objects as values, and then force them during lookup.
@@ -301,7 +300,13 @@
 (defclass prevalence-system ()
   ((hash-store
     :initform (make-hash-table)
-    :reader hash-store))
+    :reader hash-store)
+   (lock-store
+    :initform (make-hash-table)
+    :reader lock-store)
+   (lock-store-lock
+    :initform (bt:make-lock "lock-store-lock")
+    :reader lock-store-lock))
   (:documentation
    "HASH-STORE is a hash by persistent class with hash by slot as value."))
 
@@ -324,15 +329,21 @@
 
 (defun prevalence-insert-class-slot (class slotd value object)
   (when (key slotd)
-    (ccase (key slot)
-      (:unique (with-recursive-locks (prevalence-slot-locks class slotd)
-                 (if (prevalence-lookup-class-slot class slotd value)
-                     (error "hecking heck")
-                     (setf (prevalence-lookup-class-slot class slotd value) object))))
-      (:index  (with-recursive-locks (prevalence-slot-locks class slotd)
-                 (pushnew object
-                          (prevalence-lookup-class-slot class slotd value)
-                          :test (test slotd)))))))
+    (ccase (key slotd)
+      (:class-unique
+       (with-recursive-locks (prevalence-slot-locks class slotd)
+         (if (prevalence-lookup-class-slot class slotd value)
+             (error "hecking heck")
+             (setf (prevalence-lookup-class-slot class slotd value) object))))
+      ;; TODO: Add branch for precedence-unique
+      (:index
+       ;; TODO: This needs to use find-slot-defining-class
+       (with-recursive-locks (prevalence-slot-locks class slotd)
+         (pushnew object
+                  (prevalence-lookup-class-slot class slotd value)))))))
+
+;; TODO: gotta use the equaliy test when generating the hashtables
+;; in the object store, for the given slot. (equality slotd)
 
 (defun prevalence-remove-class-slots (class slotd value object)
   ;; Since insertion uses pushnew for :index,
@@ -341,14 +352,66 @@
 
 (defun prevalence-slot-locks (class &rest slotds)
   "Returns a sorted list of locks associated with the CLASS and SLOTDS."
-  'todo)
+  (mapcar (lambda (slotd)
+            ;; TODO: (ccase (key slotd)
+            (let ((slot-defining-class (find-slot-defining-class class slotd)))
+              (assert slot-defining-class)
+              (prevalence-lookup-lock (class-name slot-defining-class)
+                                      (c2mop:slot-definition-name slotd))))
+          slotds))
+
+(defun find-slot-defining-class (class slotd)
+  ;; TODO: Evaluate if we have to finalize classes.
+  (cond ((null class)
+         nil)
+        ((find-if (rfix #'direct-effective-slot-equivalence slotd)
+                  (c2mop:class-direct-slots class))
+         class)
+        (t
+         (find-if (lambda (candidate-class)
+                    (find-if (rfix #'effective-effective-slot-equivalence slotd)
+                             (c2mop:class-slots candidate-class)))
+                  (cdr (c2mop:class-precedence-list class))))))
+
+(defun direct-effective-slot-equivalence (direct-slot effective-slot)
+  (eq (c2mop:slot-definition-name direct-slot)
+      (c2mop:slot-definition-name effective-slot)))
+
+(defun effective-effective-slot-equivalence (slot1 slot2)
+  (eq (c2mop:slot-definition-name slot1)
+      (c2mop:slot-definition-name slot2)))
+
+(defun prevalence-lookup-lock (class-name slot-name)
+  "Looks up the look associted with CLASS-NAME and SLOT-NAME in
+   *PREVALENCE-SYSTEM*'s lock-store. Creates entries and returns
+   a newly-associated lock, if necessary."
+  (let* ((class-table (gethash class-name (lock-store *prevalence-system*)))
+         (lock (ignore-errors (gethash slot-name class-table))))
+    (cond ((not class-table)
+           (bt:with-lock-held ((lock-store-lock *prevalence-system*))
+             (unless (gethash class-name (lock-store *prevalence-system*))
+               (setf (gethash class-name (lock-store *prevalence-system*))
+                     (make-hash-table))))
+           (prevalence-lookup-lock class-name slot-name))
+          ((not lock)
+           (bt:with-lock-held ((lock-store-lock *prevalence-system*))
+             (unless (gethash slot-name class-table)
+               (setf (gethash slot-name class-table)
+                     (bt:make-lock (format nil "~A lock: ~A ~A"
+                                           *prevalence-system* class-name slot-name)))))
+           (prevalence-lookup-lock class-name slot-name))
+          (t lock))))
 
 
 
 
 
 
+(defun prevalence-writer (&rest args)
+  (format t "Dummy-writer: ~S" args))
 
+(defun prevalence-insert (&rest args)
+  (format t "Dummy-insert: ~S" args))
 
 
 
@@ -357,18 +420,18 @@
 (defclass ptest-class ()
   ((a
     :initarg :a
-    :key :unique
+    :key :precedence-unique
     :accessor a))
   (:metaclass prevalence-class))
 
-(defclass ptester-class2 (test-class)
+(defclass ptester-class2 (ptest-class)
   ((b
     :initarg :b
     :key :index
     :accessor b))
   (:metaclass prevalence-class))
 
-(defclass ptester-class3 (test-class)
+(defclass ptester-class3 (ptest-class)
   ((c
     :initarg :c
     :key nil
