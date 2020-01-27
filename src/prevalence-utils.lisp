@@ -51,6 +51,8 @@
     "Subslot to specify how to compare valus of the slot for equality.
     Used by the prevalence system's hash-tables.")))
 
+;; TODO: Need to add logic for these two :) *persisting-p* and *prevalencing-p*
+
 (defparameter *persisting-p* t
   "Toggle for whether to persist (aka serialize and write) data or not.")
 
@@ -167,7 +169,7 @@
   "Returns a list of slot objects with :precedence-unique keys"
   (class-x-key-slots instance-or-class :precedence-unique))
 
-(define-condition non-unique-unique-key (error)
+(define-condition prevalence-breach (error)
   ((breach-value
     :initarg :breach-value
     :accessor breach-value)
@@ -179,13 +181,37 @@
     :accessor breach-class))
   (:report
    (lambda (condition stream)
+     (format stream "Breach for class ~S, slot ~S, value ~S"
+             (breach-class condition)
+             (breach-slot condition)
+             (breach-value condition))))
+  (:documentation
+   "Ancestor error for different breaches of prevalence constraints."))
+
+(define-condition non-unique-unique-key (prevalence-breach)
+  ()
+  (:report
+   (lambda (condition stream)
      (format stream "Uniqueness broken: class ~S, slot ~S, value ~S"
              (breach-class condition)
              (breach-slot condition)
              (breach-value condition))))
   (:documentation
-   "A condition for use when detecting (potential) breaches
-    of the uniqueness constraint of unique keyable-slots."))
+   "For breaches of the uniqueness constraints on keyable-slots."))
+
+(define-condition removing-nonexistant-entry (prevalence-breach)
+  ((breach-object
+   :initarg :breach-object
+   :accessor breach-object))
+  (:report
+   (lambda (condition stream)
+     (format stream "Tried to remove object ~S, for class ~S, slot ~S, value ~S,~% ~
+                     but couldn't find an entry"
+             (breach-object condition) (breach-class condition)
+             (breach-slot   condition) (breach-value condition))))
+  (:documentation
+   "For when trying to remove objects from mismatched entries."))
+
 
 ;;;; 1. PREVALENCE-CLASS section
 
@@ -266,20 +292,24 @@
           (results (multiple-value-list (call-next-method)))
           (prevalenced-p nil)
           (persisted-p   nil)
-          (removed-p     nil))
+          (completed-p   nil))
       (unwind-protect
            (progn
              (prevalence-insert-class-slot class slotd new-value instance)
              (setf prevalenced-p t)
              '|persist-(lock)|
              (setf persisted-p t)
-             '|remove-from-old-slot-index-(lock)|
-             (setf removed-p t)
+             (prevalence-remove-class-slots class slotd old-value instance)
+             (setf completed-p t)
              (values-list results))
-        (when prevalenced-p
-          '|undo-the-move|)
-        (when persisted-p
-          '|persist-reverse?|)))))
+        (unless completed-p
+          (when prevalenced-p
+            (prevalence-remove-class-slots class slotd new-value instance)
+            (if slot-boundp
+                (call-next-method old-value class instance slotd)
+                (slot-makunbound instance (c2mop:slot-definition-name slotd))))
+          (when persisted-p
+            '|persist-reverse?|))))))
 
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)
   (declare (ignorable class initargs))
@@ -347,12 +377,13 @@
            (error 'non-unique-unique-key
                   :breach-class class :breach-slot slotd :breach-value value)
            (setf (prevalence-lookup-class-slot class slotd value) object))))
+    ;; TODO: for :prec-uniq and :index, we can find the slot-defining-class first before locking
     (:precedence-unique
      (with-recursive-locks (prevalence-slot-locks class slotd)
        (let ((slot-defining-class (find-slot-defining-class class slotd)))
          (if (prevalence-lookup-class-slot slot-defining-class slotd value)
              (error 'non-unique-unique-key
-                    :breach-class class :breach-slot slotd :breach-value value)
+                    :breach-class slot-defining-class :breach-slot slotd :breach-value value)
              (setf (prevalence-lookup-class-slot slot-defining-class slotd value) object)))))
     (:index
      (with-recursive-locks (prevalence-slot-locks class slotd)
@@ -363,9 +394,27 @@
     ((nil) :do-nothing)))
 
 (defun prevalence-remove-class-slots (class slotd value object)
-  ;; Since insertion uses pushnew for :index,
-  ;; we perhaps ought to remove from the back...
-  'todo)
+  (flet ((unique-removal (using-class)
+           (if (eq (prevalence-lookup-class-slot using-class slotd value)
+                   object)
+               (setf (prevalence-lookup-class-slot using-class slotd value) nil)
+               (error 'removing-nonexistant-entry
+                      :breach-class using-class :breach-slot slotd
+                      :breach-value value       :breach-object object))))
+    (ccase (key slotd)
+      (:class-unique
+       (unique-removal class))
+      (:precedence-unique
+       (unique-removal (find-slot-defining-class class slotd)))
+      (:index
+       (let ((slot-defining-class (find-slot-defining-class class slotd)))
+         (with-recursive-locks (prevalence-slot-locks slot-defining-class slotd)
+           (if (find object (prevalence-lookup-class-slot slot-defining-class slotd value))
+               (setf (prevalence-lookup-class-slot slot-defining-class slotd value)
+                     (remove object (prevalence-lookup-class-slot slot-defining-class slotd value)))
+               (error 'removing-nonexistant-entry
+                      :breach-class slot-defining-class :breach-slot slotd
+                      :breach-value value               :breach-object object))))))))
 
 (defun prevalence-slot-locks (class &rest slotds)
   "Returns a sorted list of locks associated with the CLASS and SLOTDS."
