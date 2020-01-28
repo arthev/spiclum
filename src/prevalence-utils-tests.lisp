@@ -103,6 +103,13 @@
 
 ;;;; Tests for Prevalence System
 
+(5am:def-suite :prevalence
+  :description "Test suite to hold all tests of the prevalence system")
+
+(5am:def-suite :prevalence.unit :in :prevalence)
+
+(5am:in-suite :prevalence.unit)
+
 (5am:test :find-slot-defining-class-finds-expected-classes
   (destructuring-bind (top left right bottom) (hierarchy)
     (flet ((check-findings (slot-defining-class slot-name expected)
