@@ -61,10 +61,13 @@
 
 ;;;; -2. Malplaced Helpers
 
+(defun lock-name (lock)
+  (sb-thread:mutex-name lock))
+
 (defmacro with-recursive-locks (locks &body body)
   "Non-portable: bordeaux-threads doesn't support lock-name lookup."
   `(call-with-recursive-locks
-    (sort ,locks #'string< :key #'sb-thread:mutex-name)
+    (sort ,locks #'string< :key #'lock-name)
     (lambda () ,@body)))
 
 (defun call-with-recursive-locks (locks body)
@@ -419,7 +422,7 @@
                       :breach-value value               :breach-object object))))))))
 
 (defun prevalence-slot-locks (class &rest slotds)
-  "Returns a sorted list of locks associated with the CLASS and SLOTDS."
+  "Returns a list of locks associated with the CLASS and SLOTDS."
   (flet ((lock-for-slot-defining-class (slotd)
            (let ((slot-defining-class (find-slot-defining-class class slotd)))
              (assert slot-defining-class)
@@ -434,6 +437,9 @@
             slotds)))
 
 (defun find-slot-defining-class (class slotd)
+  "Finds the slot-defining-class by (if it's not CLASS),
+   recursivelyclimbing the first class in CLASS's precedence-list
+   with an effective slotd matching SLOTD."
   ;; TODO: Evaluate if we have to finalize classes.
   ;; TODO: Check the MOP book to see if this is proper behaviour.
   ;; ALSO if we need to mark nodes to avoid infinite recursion.
