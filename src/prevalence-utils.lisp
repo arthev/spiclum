@@ -44,7 +44,7 @@
     :documentation
     "Subslot to specify whether a slot is a key. See KEYABLE-SLOT-KEY.")
    (equality
-    :initarg :key
+    :initarg :equality
     :accessor equality
     :initform #'eql
     :documentation
@@ -299,7 +299,7 @@
              (setf prevalenced-p t)
              '|persist-(lock)|
              (setf persisted-p t)
-             (prevalence-remove-class-slots class slotd old-value instance)
+             (prevalence-remove-class-slot class slotd old-value instance)
              (setf completed-p t)
              (values-list results))
         (unless completed-p
@@ -370,6 +370,7 @@
     (setf (gethash value slot-table) new-value)))
 
 (defun prevalence-insert-class-slot (class slotd value object)
+  (unless *prevalencing-p* (return-from prevalence-insert-class-slot nil))
   (ccase (key slotd)
     (:class-unique
      (with-recursive-locks (prevalence-slot-locks class slotd)
@@ -393,7 +394,8 @@
                                               value))))
     ((nil) :do-nothing)))
 
-(defun prevalence-remove-class-slots (class slotd value object)
+(defun prevalence-remove-class-slot (class slotd value object)
+  (unless *prevalencing-p* (return-from prevalence-remove-class-slot nil))
   (flet ((unique-removal (using-class)
            (if (eq (prevalence-lookup-class-slot using-class slotd value)
                    object)
@@ -441,10 +443,12 @@
                   (c2mop:class-direct-slots class))
          class)
         (t
-         (find-if (lambda (candidate-class)
-                    (find-if (rfix #'effective-effective-slot-equivalence slotd)
-                             (c2mop:class-slots candidate-class)))
-                  (cdr (c2mop:class-precedence-list class))))))
+         (find-slot-defining-class
+          (find-if (lambda (candidate-class)
+                     (find-if (rfix #'effective-effective-slot-equivalence slotd)
+                              (c2mop:class-slots candidate-class)))
+                   (cdr (c2mop:class-precedence-list class)))
+          slotd))))
 
 (defun direct-effective-slot-equivalence (direct-slot effective-slot)
   (eq (c2mop:slot-definition-name direct-slot)
@@ -474,26 +478,3 @@
                                            *prevalence-system* class-name slot-name)))))
            (prevalence-lookup-lock class-name slot-name))
           (t lock))))
-
-;;;; Z. Dumb convenience section
-
-(defclass ptest-class ()
-  ((a
-    :initarg :a
-    :key :precedence-unique
-    :accessor a))
-  (:metaclass prevalence-class))
-
-(defclass ptester-class2 (ptest-class)
-  ((b
-    :initarg :b
-    :key :index
-    :accessor b))
-  (:metaclass prevalence-class))
-
-(defclass ptester-class3 (ptest-class)
-  ((c
-    :initarg :c
-    :key nil
-    :accessor c))
-  (:metaclass prevalence-class))
