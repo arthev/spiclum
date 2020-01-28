@@ -22,23 +22,31 @@
     :accessor nil-top))
   (:metaclass prevalence-class))
 
-(defclass left-mid (top)
-  ((pu-left-mid
-    :initarg :pu-left-mid
+(defclass left (top)
+  ((pu-left
+    :initarg :pu-left
     :key :precedence-unique
     :equality #'equal
-    :accessor pu-left-mid))
+    :accessor pu-left)
+   (middle
+    :initarg :middle
+    :key :precedence-unique
+    :accessor middle))
   (:metaclass prevalence-class))
 
-(defclass right-mid (top)
-  ((pu-right-mid
-    :initarg :pu-right-mid
+(defclass right (top)
+  ((pu-right
+    :initarg :pu-right
     :key :precedence-unique
     :equality #'equal
-    :accessor pu-right-mid))
+    :accessor pu-right)
+   (middle
+    :initarg :middle
+    :key :precedence-unique
+    :accessor middle))
   (:metaclass prevalence-class))
 
-(defclass bottom (left-mid right-mid)
+(defclass bottom (left right)
   ((i-bottom
     :initarg :i-bottom
     :key :index
@@ -47,7 +55,7 @@
   (:metaclass prevalence-class))
 
 (defun hierarchy ()
-  (mapcar #'find-class '(top left-mid right-mid bottom)))
+  (mapcar #'find-class '(top left right bottom)))
 
 (dolist (class (hierarchy))
   (c2mop:finalize-inheritance class))
@@ -61,6 +69,18 @@
 
 (5am:test :find-slot-defining-class-finds-expected-classes
   (destructuring-bind (top left right bottom) (hierarchy)
-    (dolist (class (hierarchy))
-      (5am:is (eq top
-                  (find-slot-defining-class class (slot-by-name top 'pu-top)))))))
+    (flet ((check-findings (slot-defining-class slot-name expected)
+             (5am:is (equal expected
+                            (mapcar (rfix #'find-slot-defining-class
+                                          (slot-by-name slot-defining-class
+                                                        slot-name))
+                                    (hierarchy))))))
+      (check-findings top    'pu-top   (list top  top   top   top))
+      (check-findings top    'i-top    (list top  top   top   top))
+      (check-findings top    'cu-top   (list top  top   top   top))
+      (check-findings top    'nil-top  (list top  top   top   top))
+      (check-findings left   'pu-left  (list nil  left  nil   left))
+      (check-findings left   'middle   (list nil  left  right left))
+      (check-findings right  'pu-right (list nil  nil   right right))
+      (check-findings right  'middle   (list nil  left  right left))
+      (check-findings bottom 'i-bottom (list nil  nil   nil   bottom)))))

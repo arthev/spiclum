@@ -437,6 +437,7 @@
   ;; TODO: Evaluate if we have to finalize classes.
   ;; TODO: Check the MOP book to see if this is proper behaviour.
   ;; ALSO if we need to mark nodes to avoid infinite recursion.
+  (assert slotd)
   (cond ((null class)
          nil)
         ((find-if (rfix #'direct-effective-slot-equivalence slotd)
