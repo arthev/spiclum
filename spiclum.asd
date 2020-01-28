@@ -4,7 +4,9 @@
   :description "System Prevalence in Common Lisp using MOP"
   :version "-1.0"
   :author "arthev"
-  :depends-on (:cl-arthur)
+  :depends-on (:fiveam
+               :closer-mop
+               :cl-arthur)
   :components ((:file "src/packages")
                (:file "src/prevalence-utils")
                (:file "src/main")))

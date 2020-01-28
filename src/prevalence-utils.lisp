@@ -172,6 +172,10 @@
   "Returns a list of slot objects with :precedence-unique keys"
   (class-x-key-slots instance-or-class :precedence-unique))
 
+(defun nil-key-slots (instance-or-class)
+  "Returns a list of slot objects with nil keys"
+  (class-x-key-slots instance-or-class nil))
+
 (define-condition prevalence-breach (error)
   ((breach-value
     :initarg :breach-value
@@ -422,7 +426,7 @@
                       :breach-value value               :breach-object object))))))))
 
 (defun prevalence-slot-locks (class &rest slotds)
-  "Returns a list of locks associated with the CLASS and SLOTDS."
+  "Returns a list of locks associated with CLASS and SLOTDS."
   (flet ((lock-for-slot-defining-class (slotd)
            (let ((slot-defining-class (find-slot-defining-class class slotd)))
              (assert slot-defining-class)
