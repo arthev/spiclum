@@ -311,7 +311,7 @@
              (values-list results))
         (unless completed-p
           (when prevalenced-p
-            (prevalence-remove-class-slots class slotd new-value instance)
+            (prevalence-remove-class-slot class slotd new-value instance)
             (if slot-boundp
                 (call-next-method old-value class instance slotd)
                 (slot-makunbound instance (c2mop:slot-definition-name slotd))))
@@ -374,7 +374,9 @@
     (unless slot-table
       (setf (gethash (c2mop:slot-definition-name slotd) class-table)
             (setf slot-table (make-hash-table :test (equality slotd)))))
-    (setf (gethash value slot-table) new-value)))
+    (if (null new-value)
+        (remhash value slot-table)
+        (setf (gethash value slot-table) new-value))))
 
 (defun prevalence-insert-class-slot (class slotd value object)
   (unless *prevalencing-p* (return-from prevalence-insert-class-slot nil))
