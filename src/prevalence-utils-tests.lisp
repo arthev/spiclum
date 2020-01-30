@@ -197,7 +197,7 @@
                     "sb2 remains under 5 after (setf (i-bottom sb2) 6)"))))
 
 (5am:test :setfing-class-unique-keyable-slot-updates-lookups-as-expected
-  (with-fixture-system (sb1 sb2)
+  (with-fixture-system (sb1 _)
     (let ((bottom (find-class 'bottom)))
       (setf (cu-top sb1) 'big-oof)
       (5am:is-true (eq sb1 (prevalence-lookup-class-slot
@@ -208,7 +208,7 @@
                     "something found under 'hmm after (setf (cu-top sb1) 'big-oof)"))))
 
 (5am:test :setfing-precedence-unique-keyable-slot-updates-lookups-as-expected
-  (with-fixture-system (sb1 sb2)
+  (with-fixture-system (sb1 _)
     (let ((top (find-class 'top)))
       (setf (pu-top sb1) "didgeridoo")
       (5am:is-true (eq sb1 (prevalence-lookup-class-slot
@@ -217,6 +217,23 @@
       (5am:is-false (prevalence-lookup-class-slot
                      top (slot-by-name top 'pu-top) "top")
                     "something found under \"top\" after (setf (pu-top sb1) \"didgeridoo\")"))))
+
+(5am:test :setfing-unique-keyable-slot-throws-appropriate-error
+  (with-fixture-system (sb1 _)
+    (handler-case
+        (progn
+          (setf (cu-top sb1) 'nei)
+          (5am:fail "(setf (cu-top sb1) 'nei) didn't throw expected error!"))
+      (non-unique-unique-key ()
+        (5am:pass "(setf (cu-top sb1) 'nei) threw appropriate error, as expected")))
+    (handler-case
+        (progn
+          (setf (pu-top sb1) "tip")
+          (5am:fail "(setf (pu-top sb1) \"tip\") didn't throw expected error!"))
+      (non-unique-unique-key ()
+        (5am:pass "(setf (pu-top sb1) \"tip\") threw appropriate error, as expected")))))
+
+
 
 ;; Tests for make-instance
 ;; Tests for setf
