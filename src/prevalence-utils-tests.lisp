@@ -168,7 +168,8 @@
 
 (5am:test :setfing-index-keyable-slot-updates-lookups-as-expected
   (with-fixture-system (sb1 sb2)
-    (let ((bottom (find-class 'bottom)))
+    (let ((*persisting-p* nil)
+          (bottom (find-class 'bottom)))
       (setf (i-bottom sb1) 6)
       (5am:is-true (member sb1
                            (prevalence-lookup-class-slot
@@ -198,7 +199,8 @@
 
 (5am:test :setfing-class-unique-keyable-slot-updates-lookups-as-expected
   (with-fixture-system (sb1 _)
-    (let ((bottom (find-class 'bottom)))
+    (let ((*persisting-p* nil)
+          (bottom (find-class 'bottom)))
       (setf (cu-top sb1) 'big-oof)
       (5am:is-true (eq sb1 (prevalence-lookup-class-slot
                             bottom (slot-by-name bottom 'cu-top) 'big-oof))
@@ -209,7 +211,8 @@
 
 (5am:test :setfing-precedence-unique-keyable-slot-updates-lookups-as-expected
   (with-fixture-system (sb1 _)
-    (let ((top (find-class 'top)))
+    (let ((*persisting-p* nil)
+          (top (find-class 'top)))
       (setf (pu-top sb1) "didgeridoo")
       (5am:is-true (eq sb1 (prevalence-lookup-class-slot
                             top (slot-by-name top 'pu-top) "didgeridoo"))
@@ -220,21 +223,20 @@
 
 (5am:test :setfing-unique-keyable-slot-throws-appropriate-error
   (with-fixture-system (sb1 _)
-    (handler-case
-        (progn
-          (setf (cu-top sb1) 'nei)
-          (5am:fail "(setf (cu-top sb1) 'nei) didn't throw expected error!"))
-      (non-unique-unique-key ()
-        (5am:pass "(setf (cu-top sb1) 'nei) threw appropriate error, as expected")))
-    (handler-case
-        (progn
-          (setf (pu-top sb1) "tip")
-          (5am:fail "(setf (pu-top sb1) \"tip\") didn't throw expected error!"))
-      (non-unique-unique-key ()
-        (5am:pass "(setf (pu-top sb1) \"tip\") threw appropriate error, as expected")))))
+    (let ((*persisting-p* nil))
+      (handler-case
+          (progn
+            (setf (cu-top sb1) 'nei)
+            (5am:fail "(setf (cu-top sb1) 'nei) didn't throw expected error!"))
+        (non-unique-unique-key ()
+          (5am:pass "(setf (cu-top sb1) 'nei) threw appropriate error, as expected")))
+      (handler-case
+          (progn
+            (setf (pu-top sb1) "tip")
+            (5am:fail "(setf (pu-top sb1) \"tip\") didn't throw expected error!"))
+        (non-unique-unique-key ()
+          (5am:pass "(setf (pu-top sb1) \"tip\") threw appropriate error, as expected"))))))
 
 
 
 ;; Tests for make-instance
-;; Tests for setf
-;; Tests for metaclass-of
