@@ -301,7 +301,8 @@
           (persisted-p   nil)
           (completed-p   nil))
       (unwind-protect
-           (progn
+           (unless (and slot-boundp
+                        (funcall (equality slotd) new-value old-value))
              (prevalence-insert-class-slot class slotd new-value instance)
              (setf prevalenced-p t)
              '|persist-(lock)|
@@ -321,7 +322,13 @@
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)
   (declare (ignorable class initargs))
   (let ((instance (with-ignored-prevalence (call-next-method))))
-    '|prevalence-for-all-slots-(lock)|
+    (let ((*persisting-p* nil))
+      (dolist (slotd (c2mop:class-slots class))
+        (prevalence-insert-class-slot
+         class
+         slotd
+         (slot-value instance (c2mop:slot-definition-name slotd))
+         instance)))
     '|persist-(lock): 'make-instance class initargs|
     instance))
 
@@ -444,7 +451,7 @@
 
 (defun find-slot-defining-class (class slotd)
   "Finds the slot-defining-class by (if it's not CLASS),
-   recursivelyclimbing the first class in CLASS's precedence-list
+   recursively climbing the first class in CLASS's precedence-list
    with an effective slotd matching SLOTD."
   ;; TODO: Evaluate if we have to finalize classes.
   ;; TODO: Check the MOP book to see if this is proper behaviour.
@@ -491,3 +498,5 @@
                                            *prevalence-system* class-name slot-name)))))
            (prevalence-lookup-lock class-name slot-name))
           (t lock))))
+
+;;;; Serializing has to respect unbound slots

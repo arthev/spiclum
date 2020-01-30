@@ -107,6 +107,23 @@
 (defun slot-by-name (class name)
   (find name (c2mop:class-slots class) :key #'c2mop:slot-definition-name))
 
+(defun check-lookup-finds-object (obj)
+  (dolist (slotd (set-difference
+                  (c2mop:class-slots (class-of obj))
+                  (nil-key-slots obj)))
+    (let ((slot-name (c2mop:slot-definition-name slotd))
+          (using-class
+            (ccase (key slotd)
+              ((:index :precedence-unique)
+               (find-slot-defining-class (class-of obj) slotd))
+              (:class-unique
+               (class-of obj)))))
+      (5am:is (member obj
+                      (mklist (prevalence-lookup-class-slot
+                               using-class
+                               slotd
+                               (slot-value obj slot-name))))))))
+
 ;;;; Tests for Prevalence System
 
 (5am:def-suite :prevalence
@@ -147,24 +164,8 @@
 
 (5am:test :prevalence-lookup-class-slot-locates-expected-object
   (with-fixture-system (sample-bottom-1 sample-bottom-2)
-    (flet ((check-object (obj)
-             (dolist (slotd (set-difference
-                             (c2mop:class-slots (class-of obj))
-                             (nil-key-slots obj)))
-               (let ((slot-name (c2mop:slot-definition-name slotd))
-                     (using-class
-                       (ccase (key slotd)
-                         ((:index :precedence-unique)
-                          (find-slot-defining-class (class-of obj) slotd))
-                         (:class-unique
-                          (class-of obj)))))
-                 (5am:is (member obj
-                                 (mklist (prevalence-lookup-class-slot
-                                          using-class
-                                          slotd
-                                          (slot-value obj slot-name)))))))))
-      (check-object sample-bottom-1)
-      (check-object sample-bottom-2))))
+    (check-lookup-finds-object sample-bottom-1)
+    (check-lookup-finds-object sample-bottom-2)))
 
 (5am:test :setfing-index-keyable-slot-updates-lookups-as-expected
   (with-fixture-system (sb1 sb2)
@@ -237,6 +238,15 @@
         (non-unique-unique-key ()
           (5am:pass "(setf (pu-top sb1) \"tip\") threw appropriate error, as expected"))))))
 
+(5am:test :setf-to-equality-value-as-before-does-not-interfere
+  (with-fixture-system (sb1 _)
+    (let ((*persisting-p* nil))
+      (dolist (slotd (c2mop:class-slots (class-of sb1)))
+        (setf (slot-value sb1 (c2mop:slot-definition-name slotd))
+              (slot-value sb1 (c2mop:slot-definition-name slotd))))
+      (check-lookup-finds-object sb1))))
 
-
-;; Tests for make-instance
+(5am:test :make-instance-correctly-inserts-into-prevalence-system
+  ;; Can a fn contain 5am:is? And then be used in several places?
+  ;; If so: make an instance... and then use check-object! (from the lookup test)
+  'todo)
