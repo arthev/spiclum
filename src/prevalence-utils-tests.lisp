@@ -92,6 +92,16 @@
       (insert-obj sample-bottom-2)
       (values hash-store sample-bottom-1 sample-bottom-2))))
 
+(defmacro with-fixture-system ((sample-bottom-1-var sample-bottom-2-var)
+                               &body body)
+  (let ((store-var (gensym)))
+    `(let ((*prevalence-system* (make-instance 'prevalence-system)))
+       (multiple-value-bind (,store-var ,sample-bottom-1-var ,sample-bottom-2-var)
+           (simple-sample-hash-store)
+         (with-slots (hash-store) *prevalence-system*
+           (setf hash-store ,store-var))
+         ,@body))))
+
 ;;;; Helpers
 
 (defun slot-by-name (class name)
@@ -136,30 +146,77 @@
       (5am:is-true (search "BOTTOM I-BOTTOM" (lock-name i-bottom-lock))))))
 
 (5am:test :prevalence-lookup-class-slot-locates-expected-object
-  (let ((*prevalence-system* (make-instance 'prevalence-system)))
-    (multiple-value-bind (sample-hash-store sample-bottom-1 sample-bottom-2)
-        (simple-sample-hash-store)
-      (with-slots (hash-store) *prevalence-system*
-        (setf hash-store sample-hash-store))
-      (flet ((check-object (obj)
-               (dolist (slotd (set-difference
-                               (c2mop:class-slots (class-of obj))
-                               (nil-key-slots obj)))
-                 (let ((slot-name (c2mop:slot-definition-name slotd))
-                       (using-class
-                         (ccase (key slotd)
-                           ((:index :precedence-unique)
-                            (find-slot-defining-class (class-of obj) slotd))
-                           (:class-unique
-                            (class-of obj)))))
-                   (5am:is (member obj
-                                   (mklist (prevalence-lookup-class-slot
-                                            using-class
-                                            slotd
-                                            (slot-value obj slot-name)))))))))
-        (check-object sample-bottom-1)
-        (check-object sample-bottom-2)))))
+  (with-fixture-system (sample-bottom-1 sample-bottom-2)
+    (flet ((check-object (obj)
+             (dolist (slotd (set-difference
+                             (c2mop:class-slots (class-of obj))
+                             (nil-key-slots obj)))
+               (let ((slot-name (c2mop:slot-definition-name slotd))
+                     (using-class
+                       (ccase (key slotd)
+                         ((:index :precedence-unique)
+                          (find-slot-defining-class (class-of obj) slotd))
+                         (:class-unique
+                          (class-of obj)))))
+                 (5am:is (member obj
+                                 (mklist (prevalence-lookup-class-slot
+                                          using-class
+                                          slotd
+                                          (slot-value obj slot-name)))))))))
+      (check-object sample-bottom-1)
+      (check-object sample-bottom-2))))
 
+(5am:test :setfing-index-keyable-slot-updates-lookups-as-expected
+  (with-fixture-system (sb1 sb2)
+    (let ((bottom (find-class 'bottom)))
+      (setf (i-bottom sb1) 6)
+      (5am:is-true (member sb1
+                           (prevalence-lookup-class-slot
+                            bottom (slot-by-name bottom 'i-bottom) 6))
+                   "sb1 not found under 6 after (setf (i-bottom sb1) 6)")
+      (5am:is-true (member sb2
+                           (prevalence-lookup-class-slot
+                            bottom (slot-by-name bottom 'i-bottom) 5))
+                   "sb2 not remaining under 5 after (setf (i-bottom sb1) 6)")
+      (5am:is-false (member sb1
+                            (prevalence-lookup-class-slot
+                             bottom (slot-by-name bottom 'i-bottom) 5))
+                    "sb1 remains under 5 after (setf (i-bottom sb1) 6)")
+      (setf (i-bottom sb2) 6)
+      (5am:is-true (member sb2
+                           (prevalence-lookup-class-slot
+                            bottom (slot-by-name bottom 'i-bottom) 6))
+                   "sb2 not found under 6 after (setf (i-bottom sb2) 6)")
+      (5am:is-true (member sb1
+                           (prevalence-lookup-class-slot
+                            bottom (slot-by-name bottom 'i-bottom) 6))
+                   "sb2 not remaining under 6 after (setf (i-bottom sb2) 6)")
+      (5am:is-false (member sb2
+                            (prevalence-lookup-class-slot
+                             bottom (slot-by-name bottom 'i-bottom) 5))
+                    "sb2 remains under 5 after (setf (i-bottom sb2) 6)"))))
+
+(5am:test :setfing-class-unique-keyable-slot-updates-lookups-as-expected
+  (with-fixture-system (sb1 sb2)
+    (let ((bottom (find-class 'bottom)))
+      (setf (cu-top sb1) 'big-oof)
+      (5am:is-true (eq sb1 (prevalence-lookup-class-slot
+                            bottom (slot-by-name bottom 'cu-top) 'big-oof))
+                   "sb1 not found under 'big-oof after (setf (cu-top sb1) 'big-oof)")
+      (5am:is-false (prevalence-lookup-class-slot
+                     bottom (slot-by-name bottom 'cu-top) 'hmm)
+                    "something found under 'hmm after (setf (cu-top sb1) 'big-oof)"))))
+
+(5am:test :setfing-precedence-unique-keyable-slot-updates-lookups-as-expected
+  (with-fixture-system (sb1 sb2)
+    (let ((top (find-class 'top)))
+      (setf (pu-top sb1) "didgeridoo")
+      (5am:is-true (eq sb1 (prevalence-lookup-class-slot
+                            top (slot-by-name top 'pu-top) "didgeridoo"))
+                   "sb1 not found under \"didgeridoo\" after (setf (pu-top sb1) \"didgeridoo\")")
+      (5am:is-false (prevalence-lookup-class-slot
+                     top (slot-by-name top 'pu-top) "top")
+                    "something found under \"top\" after (setf (pu-top sb1) \"didgeridoo\")"))))
 
 ;; Tests for make-instance
 ;; Tests for setf
