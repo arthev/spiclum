@@ -411,20 +411,17 @@
            (error 'non-unique-unique-key
                   :breach-class class :breach-slots slotd :breach-values value)
            (setf (prevalence-lookup-class-slot class slotd value) object))))
-    ;; TODO: for :prec-uniq and :index, we can find the slot-defining-class first before locking
     (:precedence-unique
-     (with-recursive-locks (prevalence-slot-locks class slotd)
-       (let ((slot-defining-class (find-slot-defining-class class slotd)))
+     (let ((slot-defining-class (find-slot-defining-class class slotd)))
+       (with-recursive-locks (prevalence-slot-locks class slotd)
          (if (prevalence-lookup-class-slot slot-defining-class slotd value)
              (error 'non-unique-unique-key
                     :breach-class slot-defining-class :breach-slots slotd :breach-values value)
              (setf (prevalence-lookup-class-slot slot-defining-class slotd value) object)))))
     (:index
-     (with-recursive-locks (prevalence-slot-locks class slotd)
-       (pushnew object
-                (prevalence-lookup-class-slot (find-slot-defining-class class slotd)
-                                              slotd
-                                              value))))
+     (let ((slot-defining-class (find-slot-defining-class class slotd)))
+       (with-recursive-locks (prevalence-slot-locks class slotd)
+         (pushnew object (prevalence-lookup-class-slot slot-defining-class slotd value)))))
     ((nil) :do-nothing)))
 
 (defun prevalence-remove-class-slot (class slotd value object)
