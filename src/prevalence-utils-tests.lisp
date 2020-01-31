@@ -247,6 +247,8 @@
       (check-lookup-finds-object sb1))))
 
 (5am:test :make-instance-correctly-inserts-into-prevalence-system
-  ;; Can a fn contain 5am:is? And then be used in several places?
-  ;; If so: make an instance... and then use check-object! (from the lookup test)
-  'todo)
+  (with-fixture-system (_1 _2)
+    (let* ((*persisting-p* nil)
+           (plist (list :i-bottom 5 :middle 'joda  :pu-left "ham" :pu-right "hogr" :pu-top "tap" :i-top 19.0d0 :cu-top 'tja :nil-top 55))
+           (bottom (apply #'make-instance 'bottom plist)))
+      (check-lookup-finds-object bottom))))
