@@ -19,22 +19,9 @@
 ;; Just provide a query that specifies whether to look for the
 ;; explicit class, or the class and its subclasses, duh.
 
-;; Uh-oh. How to handle uniqueness for subclasses of a class?
-;; Say we have an unique email, but we have more than one type of
-;; user class (all inheriting from a root class).
-;; Do we need :class-unique versus :precedence-unique?
-;; What if there's mix-ins. :precedence-unique now behaves slightly weird.
-
-;; Even worse, mix-ins don't *have* to share metaclass, even!
-;; One possibility is to forbid non-shared metaclass inheritance.
-;; Can be checked during definining a class, obviously.
-;; The other option is to allow it, but then we have to filter for
-;; a lot of stuff...
-;; Can probably disallow for the time being (or design as if disallowed),
-;; because it'll give immediate errors if tried unless those filters are
-;; in place.
-
 ;; Uh-oh. How to handle :class allocated slots?
+;; Lookup becomes irrelevant. Serializes trivially, if redundantly.
+;; Maybe class-allocations with non-nil slot key are an error.
 
 (defclass keyable-slot (c2mop:standard-slot-definition)
   ((key
@@ -50,8 +37,6 @@
     :documentation
     "Subslot to specify how to compare valus of the slot for equality.
     Used by the prevalence system's hash-tables.")))
-
-;; TODO: Need to add logic for these two :) *persisting-p* and *prevalencing-p*
 
 (defparameter *persisting-p* t
   "Toggle for whether to persist (aka serialize and write) data or not.")
@@ -177,21 +162,21 @@
   (class-x-key-slots instance-or-class nil))
 
 (define-condition prevalence-breach (error)
-  ((breach-value
-    :initarg :breach-value
-    :accessor breach-value)
-   (breach-slot
-    :initarg :breach-slot
-    :accessor breach-slot)
+  ((breach-values
+    :initarg :breach-values
+    :accessor breach-values)
+   (breach-slots
+    :initarg :breach-slots
+    :accessor breach-slots)
    (breach-class
     :initarg :breach-class
     :accessor breach-class))
   (:report
    (lambda (condition stream)
-     (format stream "Breach for class ~S, slot ~S, value ~S"
+     (format stream "Breach for class ~S, slot(s) ~S, value(s) ~S"
              (breach-class condition)
-             (breach-slot condition)
-             (breach-value condition))))
+             (breach-slots condition)
+             (breach-values condition))))
   (:documentation
    "Ancestor error for different breaches of prevalence constraints."))
 
@@ -199,10 +184,10 @@
   ()
   (:report
    (lambda (condition stream)
-     (format stream "Uniqueness broken: class ~S, slot ~S, value ~S"
+     (format stream "Uniqueness broken: class ~S, slot(s) ~S, value(s) ~S"
              (breach-class condition)
-             (breach-slot condition)
-             (breach-value condition))))
+             (breach-slots condition)
+             (breach-values condition))))
   (:documentation
    "For breaches of the uniqueness constraints on keyable-slots."))
 
@@ -212,10 +197,10 @@
    :accessor breach-object))
   (:report
    (lambda (condition stream)
-     (format stream "Tried to remove object ~S, for class ~S, slot ~S, value ~S,~% ~
+     (format stream "Tried to remove object ~S, for class ~S, slot(s) ~S, value(s) ~S,~% ~
                      but couldn't find an entry"
              (breach-object condition) (breach-class condition)
-             (breach-slot   condition) (breach-value condition))))
+             (breach-slots   condition) (breach-values condition))))
   (:documentation
    "For when trying to remove objects from mismatched entries."))
 
@@ -239,6 +224,15 @@
 
 ;; TODO: If we decide to allow mixins, then we probably
 ;; want to validate the reverse of the above too. (On a 'caveat emptor' basis.)
+;; :precedence-unique probably behaves weird with mixins.
+;; Even worse, mix-ins don't *have* to share metaclass, even!
+;; One possibility is to forbid non-shared metaclass inheritance.
+;; Can be checked during definining a class, obviously.
+;; The other option is to allow it, but then we have to filter for
+;; a lot of stuff...
+;; Can probably disallow for the time being (or design as if disallowed),
+;; because it'll give immediate errors if tried unless those filters are
+;; in place.
 
 ;; To avoid problems with circularities, one option is to lazy up slots with
 ;; persistent objects as values, and then force them during lookup.
@@ -322,14 +316,28 @@
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)
   (declare (ignorable class initargs))
   (let ((instance (with-ignored-prevalence (call-next-method))))
-    (let ((*persisting-p* nil))
-      (dolist (slotd (c2mop:class-slots class))
-        (prevalence-insert-class-slot
-         class
-         slotd
-         (slot-value instance (c2mop:slot-definition-name slotd))
-         instance)))
-    '|persist-(lock): 'make-instance class initargs|
+    (let ((*persisting-p* nil)
+          (problem-slots nil)
+          (problem-values nil)
+          (slotds (c2mop:class-slots class)))
+      (with-recursive-locks (apply #'prevalence-slot-locks class slotds)
+        (dolist (slotd slotds)
+          (let ((value (slot-value instance (c2mop:slot-definition-name slotd))))
+            (unless (prevalence-lookup-available-p class slotd value)
+              (push slotd problem-slots)
+              (push value problem-values))))
+        (when (null problem-slots)
+          (dolist (slotd slotds)
+            (prevalence-insert-class-slot
+             class
+             slotd
+             (slot-value instance (c2mop:slot-definition-name slotd))
+             instance))))
+      (if problem-slots
+          (error 'non-unique-unique-keys :breach-class class
+                                         :breach-slots problem-slots
+                                         :breach-values problem-values)
+          '|persist-(lock): 'make-instance class initargs|))
     instance))
 
 
@@ -369,6 +377,15 @@
                       (gethash (class-name class)
                                (hash-store *prevalence-system*))))))
 
+(defun prevalence-lookup-available-p (class slotd value)
+  (ccase (key slotd)
+    ((:index nil) t)
+    (:class-unique
+     (not (prevalence-lookup-class-slot class slotd value)))
+    (:precedence-unique
+     (not (prevalence-lookup-class-slot
+           (find-slot-defining-class class slotd) slotd value)))))
+
 (defun (setf prevalence-lookup-class-slot) (new-value class slotd value)
   "Sets the appropriate nested hash-lookup value,
    creating new tables as necessary."
@@ -386,13 +403,13 @@
         (setf (gethash value slot-table) new-value))))
 
 (defun prevalence-insert-class-slot (class slotd value object)
-  (unless *prevalencing-p* (return-from prevalence-insert-class-slot nil))
+  (unless *prevalencing-p* (return-from prevalence-insert-class-slot :do-nothing))
   (ccase (key slotd)
     (:class-unique
      (with-recursive-locks (prevalence-slot-locks class slotd)
        (if (prevalence-lookup-class-slot class slotd value)
            (error 'non-unique-unique-key
-                  :breach-class class :breach-slot slotd :breach-value value)
+                  :breach-class class :breach-slots slotd :breach-values value)
            (setf (prevalence-lookup-class-slot class slotd value) object))))
     ;; TODO: for :prec-uniq and :index, we can find the slot-defining-class first before locking
     (:precedence-unique
@@ -400,7 +417,7 @@
        (let ((slot-defining-class (find-slot-defining-class class slotd)))
          (if (prevalence-lookup-class-slot slot-defining-class slotd value)
              (error 'non-unique-unique-key
-                    :breach-class slot-defining-class :breach-slot slotd :breach-value value)
+                    :breach-class slot-defining-class :breach-slots slotd :breach-values value)
              (setf (prevalence-lookup-class-slot slot-defining-class slotd value) object)))))
     (:index
      (with-recursive-locks (prevalence-slot-locks class slotd)
@@ -411,14 +428,14 @@
     ((nil) :do-nothing)))
 
 (defun prevalence-remove-class-slot (class slotd value object)
-  (unless *prevalencing-p* (return-from prevalence-remove-class-slot nil))
+  (unless *prevalencing-p* (return-from prevalence-remove-class-slot :do-nothing))
   (flet ((unique-removal (using-class)
            (if (eq (prevalence-lookup-class-slot using-class slotd value)
                    object)
                (setf (prevalence-lookup-class-slot using-class slotd value) nil)
                (error 'removing-nonexistant-entry
-                      :breach-class using-class :breach-slot slotd
-                      :breach-value value       :breach-object object))))
+                      :breach-class using-class :breach-slots slotd
+                      :breach-values value       :breach-object object))))
     (ccase (key slotd)
       (:class-unique
        (unique-removal class))
@@ -431,8 +448,8 @@
                (setf (prevalence-lookup-class-slot slot-defining-class slotd value)
                      (remove object (prevalence-lookup-class-slot slot-defining-class slotd value)))
                (error 'removing-nonexistant-entry
-                      :breach-class slot-defining-class :breach-slot slotd
-                      :breach-value value               :breach-object object))))))))
+                      :breach-class slot-defining-class :breach-slots slotd
+                      :breach-values value               :breach-object object))))))))
 
 (defun prevalence-slot-locks (class &rest slotds)
   "Returns a list of locks associated with CLASS and SLOTDS."
@@ -441,13 +458,16 @@
              (assert slot-defining-class)
              (prevalence-lookup-lock (class-name slot-defining-class)
                                      (c2mop:slot-definition-name slotd)))))
-    (mapcar (lambda (slotd)
-              (ccase (key slotd)
-                (:class-unique (prevalence-lookup-lock (class-name class)
-                                                       (c2mop:slot-definition-name slotd)))
-                (:index (lock-for-slot-defining-class slotd))
-                (:precedence-unique (lock-for-slot-defining-class slotd))))
-            slotds)))
+    (remove nil
+            (mapcar (lambda (slotd)
+                      (ccase (key slotd)
+                        (:class-unique (prevalence-lookup-lock
+                                        (class-name class)
+                                        (c2mop:slot-definition-name slotd)))
+                        (:index (lock-for-slot-defining-class slotd))
+                        (:precedence-unique (lock-for-slot-defining-class slotd))
+                        ((nil) nil)))
+                    slotds))))
 
 (defun find-slot-defining-class (class slotd)
   "Finds the slot-defining-class by (if it's not CLASS),
