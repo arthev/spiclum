@@ -404,25 +404,20 @@
 
 (defun prevalence-insert-class-slot (class slotd value object)
   (unless *prevalencing-p* (return-from prevalence-insert-class-slot :do-nothing))
-  (ccase (key slotd)
-    (:class-unique
-     (with-recursive-locks (prevalence-slot-locks class slotd)
-       (if (prevalence-lookup-class-slot class slotd value)
-           (error 'non-unique-unique-key
-                  :breach-class class :breach-slots slotd :breach-values value)
-           (setf (prevalence-lookup-class-slot class slotd value) object))))
-    (:precedence-unique
-     (let ((slot-defining-class (find-slot-defining-class class slotd)))
-       (with-recursive-locks (prevalence-slot-locks class slotd)
-         (if (prevalence-lookup-class-slot slot-defining-class slotd value)
-             (error 'non-unique-unique-key
-                    :breach-class slot-defining-class :breach-slots slotd :breach-values value)
-             (setf (prevalence-lookup-class-slot slot-defining-class slotd value) object)))))
-    (:index
-     (let ((slot-defining-class (find-slot-defining-class class slotd)))
-       (with-recursive-locks (prevalence-slot-locks class slotd)
-         (pushnew object (prevalence-lookup-class-slot slot-defining-class slotd value)))))
-    ((nil) :do-nothing)))
+  (flet ((unique-insert (using-class)
+           (with-recursive-locks (prevalence-slot-locks using-class slotd)
+             (if (prevalence-lookup-class-slot using-class slotd value)
+                 (error 'non-unique-unique-key
+                        :breach-class using-class :breach-slots slotd :breach-values value)
+                 (setf (prevalence-lookup-class-slot using-class slotd value) object)))))
+    (ccase (key slotd)
+      (:class-unique (unique-insert class))
+      (:precedence-unique (unique-insert (find-slot-defining-class class slotd)))
+      (:index
+       (let ((slot-defining-class (find-slot-defining-class class slotd)))
+         (with-recursive-locks (prevalence-slot-locks class slotd)
+           (pushnew object (prevalence-lookup-class-slot slot-defining-class slotd value)))))
+      ((nil) :do-nothing))))
 
 (defun prevalence-remove-class-slot (class slotd value object)
   (unless *prevalencing-p* (return-from prevalence-remove-class-slot :do-nothing))
