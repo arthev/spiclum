@@ -2,7 +2,7 @@
 
 ;;;; Class Hierarchy for Testing
 
-(defclass top ()
+(defpclass top ()
   ((pu-top
     :initarg :pu-top
     :key :precedence-unique
@@ -19,10 +19,9 @@
     :accessor cu-top)
    (nil-top
     :initarg :nil-top
-    :accessor nil-top))
-  (:metaclass prevalence-class))
+    :accessor nil-top)))
 
-(defclass left (top)
+(defpclass left (top)
   ((pu-left
     :initarg :pu-left
     :key :precedence-unique
@@ -31,10 +30,9 @@
    (middle
     :initarg :middle
     :key :precedence-unique
-    :accessor middle))
-  (:metaclass prevalence-class))
+    :accessor middle)))
 
-(defclass right (top)
+(defpclass right (top)
   ((pu-right
     :initarg :pu-right
     :key :precedence-unique
@@ -43,16 +41,15 @@
    (middle
     :initarg :middle
     :key :precedence-unique
-    :accessor middle))
-  (:metaclass prevalence-class))
+    :accessor middle)))
 
-(defclass bottom (left right)
+(defpclass bottom (left right)
   ((i-bottom
     :initarg :i-bottom
     :key :index
     :equality #'equalp
-    :accessor i-bottom))
-  (:metaclass prevalence-class))
+    :accessor i-bottom)))
+
 
 (defun hierarchy ()
   (mapcar #'find-class '(top left right bottom)))

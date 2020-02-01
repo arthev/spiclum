@@ -5,6 +5,27 @@
 (defclass prevalence-class (standard-class)
   ()
   (:documentation "Meta-class for persistent objects using prevalence."))
+
+(defmethod c2mop:validate-superclass ((class prevalence-class)
+                                      (superclass standard-class))
+  "Just boilerplate declaring metaclass compatibility."
+  t)
+
+(defclass prevalence-object ()
+  ()
+  (:metaclass prevalence-class)
+  (:documentation "Class for prevalent objects to inherit, to specialize on
+                   reinitialize-instance etc."))
+
+(defmacro defpclass (class-name superclasses slot-specifiers &rest class-options)
+  (when (find :metaclass class-options :key #'car)
+    (error "DEFPCLASS uses implicit metaclass PREVALENCE-CLASS,~%~
+            but an explicit metaclass was provided for ~S" class-name))
+  `(defclass ,class-name (,@superclasses prevalence-object)
+     ,slot-specifiers
+     ,@class-options
+     (:metaclass prevalence-class)))
+
 ;; NOTE: Since canonical IDs for each persistent object will be necessary
 ;;   to ensure a coherent universe, we have another instance where
 ;;   an :allocation :subclass option for a slot would be useful.
@@ -217,11 +238,6 @@
          (*prevalencing-p* nil))
      ,@body))
 
-(defmethod c2mop:validate-superclass ((class prevalence-class)
-                                      (superclass standard-class))
-  "Just boilerplate declaring metaclass compatibility."
-  t)
-
 ;; TODO: If we decide to allow mixins, then we probably
 ;; want to validate the reverse of the above too. (On a 'caveat emptor' basis.)
 ;; :precedence-unique probably behaves weird with mixins.
@@ -322,17 +338,19 @@
           (slotds (c2mop:class-slots class)))
       (with-recursive-locks (apply #'prevalence-slot-locks class slotds)
         (dolist (slotd slotds)
-          (let ((value (slot-value instance (c2mop:slot-definition-name slotd))))
-            (unless (prevalence-lookup-available-p class slotd value)
-              (push slotd problem-slots)
-              (push value problem-values))))
+          (when (slot-boundp instance (c2mop:slot-definition-name slotd))
+            (let ((value (slot-value instance (c2mop:slot-definition-name slotd))))
+              (unless (prevalence-lookup-available-p class slotd value)
+                (push slotd problem-slots)
+                (push value problem-values)))))
         (when (null problem-slots)
           (dolist (slotd slotds)
-            (prevalence-insert-class-slot
-             class
-             slotd
-             (slot-value instance (c2mop:slot-definition-name slotd))
-             instance))))
+            (when (slot-boundp instance (c2mop:slot-definition-name slotd))
+              (prevalence-insert-class-slot
+               class
+               slotd
+               (slot-value instance (c2mop:slot-definition-name slotd))
+               instance)))))
       (if problem-slots
           (error 'non-unique-unique-keys :breach-class class
                                          :breach-slots problem-slots
@@ -388,7 +406,8 @@
 
 (defun (setf prevalence-lookup-class-slot) (new-value class slotd value)
   "Sets the appropriate nested hash-lookup value,
-   creating new tables as necessary."
+   creating new tables as necessary.
+   NOTE: Assumes any relevant locks are held already."
   (let* ((class-table (gethash (class-name class)
                                (hash-store *prevalence-system*)))
          (slot-table (ignore-errors (gethash (c2mop:slot-definition-name slotd) class-table))))
