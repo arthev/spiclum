@@ -358,6 +358,69 @@
           '|persist-(lock): 'make-instance class initargs|))
     instance))
 
+(defun slotds->values-map (instance)
+  "Returns a hash-table mapping slotds to values. Unbound slots aren't keyed."
+  (let ((hash-table (make-hash-table)))
+    (dolist (slotd (c2mop:class-slots (class-of instance)))
+      (let ((slot-name (c2mop:slot-definition-name slotd)))
+        (when (slot-boundp instance slot-name)
+          (setf (gethash slotd hash-table)
+                (slot-value instance slot-name)))))
+    hash-table))
+
+(defmethod reinitialize-instance :around ((instance prevalence-object) &rest initargs &key &allow-other-keys)
+  (declare (ignore initargs))
+  (let* ((old-values (slotds->values-map instance))
+         (instance (with-ignored-prevalence (call-next-method)))
+         ;; Lots of this is similar to make-instance. Should be refactored once working.
+         ;; "Pre-check S set of slots (with locks) and insert for all"
+         ;; seems like a reasonable abstraction, though.
+         (problem-slots nil)
+         (problem-values nil)
+         (slotds (c2mop:class-slots (class-of instance)))
+         (updated-slots (remove-if (lambda (slotd)
+                                     (let ((slot-name (c2mop:slot-definition-name slotd)))
+                                       (or (not (slot-boundp instance slot-name))
+                                           (multiple-value-bind (value present-p)
+                                               (gethash slotd old-values)
+                                             (or (not present-p)
+                                                 (funcall (equality slotd)
+                                                          value
+                                                          (slot-value instance slot-name)))))))
+                                   slotds)))
+    (with-recursive-locks (apply #'prevalence-slot-locks (class-of instance) updated-slots)
+      (dolist (slotd updated-slots)
+        (when (slot-boundp instance (c2mop:slot-definition-name slotd))
+          (let ((value (slot-value instance (c2mop:slot-definition-name slotd))))
+            (unless (prevalence-lookup-available-p (class-of instance) slotd value)
+              (push slotd problem-slots)
+              (push value problem-values)))))
+      (when (null problem-slots)
+        (dolist (slotd updated-slots)
+          (when (slot-boundp instance (c2mop:slot-definition-name slotd))
+            (prevalence-insert-class-slot
+             (class-of instance)
+             slotd
+             (slot-value instance (c2mop:slot-definition-name slotd))
+             instance)))))
+    (if problem-slots
+        (progn
+          (with-ignored-prevalence
+            (dolist (slotd slotds)
+              (let ((slot-name (c2mop:slot-definition-name slotd)))
+                (slot-makunbound instance slot-name)
+                (multiple-value-bind (value present-p)
+                    (gethash slotd old-values)
+                  (when present-p
+                    (setf (slot-value instance slot-name) value))))))
+          (error 'non-unique-unique-keys :breach-class (class-of instance)
+                                         :breach-slots problem-slots
+                                         :breach-values problem-values))
+        '|persist-(lock): 'make-instance class initargs|)
+    instance))
+
+
+
 
 
 ;;;; 2. PREVALENCE-SYSTEM section
