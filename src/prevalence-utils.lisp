@@ -462,33 +462,18 @@
                     slotds))))
 
 (defun find-slot-defining-class (class slotd)
-  "Finds the slot-defining-class by (if it's not CLASS),
-   recursively climbing the first class in CLASS's precedence-list
-   with an effective slotd matching SLOTD."
-  ;; TODO: Evaluate if we have to finalize classes.
-  ;; TODO: Check the MOP book to see if this is proper behaviour.
-  ;; ALSO if we need to mark nodes to avoid infinite recursion.
+  "Finds the most specific slot-defining-class by
+   searching through CLASS's precedence list until
+   the first hit for a direct-slot-definition."
   (assert slotd)
-  (cond ((null class)
-         nil)
-        ((find-if (rfix #'direct-effective-slot-equivalence slotd)
-                  (c2mop:class-direct-slots class))
-         class)
-        (t
-         (find-slot-defining-class
-          (find-if (lambda (candidate-class)
-                     (find-if (rfix #'effective-effective-slot-equivalence slotd)
-                              (c2mop:class-slots candidate-class)))
-                   (cdr (c2mop:class-precedence-list class)))
-          slotd))))
+  (find-if (lambda (candidate-class)
+             (find-if (rfix #'direct-effective-slot-equivalence slotd)
+                      (c2mop:class-direct-slots candidate-class)))
+           (c2mop:class-precedence-list class)))
 
 (defun direct-effective-slot-equivalence (direct-slot effective-slot)
   (eq (c2mop:slot-definition-name direct-slot)
       (c2mop:slot-definition-name effective-slot)))
-
-(defun effective-effective-slot-equivalence (slot1 slot2)
-  (eq (c2mop:slot-definition-name slot1)
-      (c2mop:slot-definition-name slot2)))
 
 (defun prevalence-lookup-lock (class-name slot-name)
   "Looks up the look associted with CLASS-NAME and SLOT-NAME in
