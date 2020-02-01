@@ -59,6 +59,11 @@
 
 ;;;; Fixtures
 
+(defparameter *sample-bottom-unoccupied-plist*
+  (list :i-bottom 5 :middle 'joda
+
+        :pu-left "ham" :pu-right "hogr" :pu-top "tap" :i-top 19.0d0 :cu-top 'tja :nil-top 55))
+
 (defun simple-sample-hash-store ()
   (let* ((plist1 (list :i-bottom 5 :middle 'oida  :pu-left "hmm" :pu-right "rett" :pu-top "top" :i-top 19   :cu-top 'hmm :nil-top 55))
          (plist2 (list :i-bottom 5 :middle 'neida :pu-left "hum" :pu-right "righ" :pu-top "tip" :i-top 19.0 :cu-top 'nei :nil-top 55))
@@ -119,7 +124,8 @@
                       (mklist (prevalence-lookup-class-slot
                                using-class
                                slotd
-                               (slot-value obj slot-name))))))))
+                               (slot-value obj slot-name))))
+              "Can't find ~S for ~S ~S~%" obj slotd (slot-value obj slot-name)))))
 
 ;;;; Tests for Prevalence System
 
@@ -246,6 +252,25 @@
 (5am:test :make-instance-correctly-inserts-into-prevalence-system
   (with-fixture-system (_1 _2)
     (let* ((*persisting-p* nil)
-           (plist (list :i-bottom 5 :middle 'joda  :pu-left "ham" :pu-right "hogr" :pu-top "tap" :i-top 19.0d0 :cu-top 'tja :nil-top 55))
+           (plist *sample-bottom-unoccupied-plist*)
            (bottom (apply #'make-instance 'bottom plist)))
       (check-lookup-finds-object bottom))))
+
+(5am:test :make-instance-with-occupied-values-throws-appropriate-error
+  'todo)
+
+(5am:test :reinitialize-instance-correctly-updates-lookups
+  (with-fixture-system (sb _)
+    (flet ((slotds->values-map (obj)
+             (mapcar (lambda (slotd)
+                       (cons slotd (slot-value sb (c2mop:slot-definition-name slotd))))
+                     (c2mop:class-slots (class-of obj)))))
+      (let* ((*persisting-p* nil)
+             (old-values (slotds->values-map sb)))
+        (apply #'reinitialize-instance sb (nthcdr 4 *sample-bottom-unoccupied-plist*))
+        (5am:is-false (equalp old-values
+                              (slotds->values-map sb)))
+        (check-lookup-finds-object sb)
+
+        ;; Add tests to see that sb is properly removed for the old-values
+        ))))

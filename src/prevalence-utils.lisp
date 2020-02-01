@@ -402,7 +402,17 @@
              (class-of instance)
              slotd
              (slot-value instance (c2mop:slot-definition-name slotd))
-             instance)))))
+             instance)))
+        (dolist (slotd updated-slots)
+          (when (key slotd)
+            (multiple-value-bind (old-value present-p)
+                (gethash slotd old-values)
+              (when (and present-p
+                         (not (funcall (equality slotd)
+                                       old-value
+                                       (slot-value instance (c2mop:slot-definition-name slotd)))))
+                (prevalence-remove-class-slot
+                 (class-of instance) slotd (gethash slotd old-values) instance)))))))
     (if problem-slots
         (progn
           (with-ignored-prevalence
