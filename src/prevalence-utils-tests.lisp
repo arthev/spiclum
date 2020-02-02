@@ -60,9 +60,7 @@
 ;;;; Fixtures
 
 (defparameter *sample-bottom-unoccupied-plist*
-  (list :i-bottom 5 :middle 'joda
-
-        :pu-left "ham" :pu-right "hogr" :pu-top "tap" :i-top 19.0d0 :cu-top 'tja :nil-top 55))
+  (list :i-bottom 5 :middle 'joda :pu-left "ham" :pu-right "hogr" :pu-top "tap" :i-top 19.0d0 :cu-top 'tja :nil-top 55))
 
 (defun simple-sample-hash-store ()
   (let* ((plist1 (list :i-bottom 5 :middle 'oida  :pu-left "hmm" :pu-right "rett" :pu-top "top" :i-top 19   :cu-top 'hmm :nil-top 55))
@@ -109,23 +107,24 @@
 (defun slot-by-name (class name)
   (find name (c2mop:class-slots class) :key #'c2mop:slot-definition-name))
 
+(defun check-lookup-finds-object-slotd-value-p (obj slotd value)
+  (let ((using-class
+          (ccase (key slotd)
+            ((:index :precedence-unique)
+             (find-slot-defining-class (class-of obj) slotd))
+            (:class-unique
+             (class-of obj)))))
+    (member obj (mklist (prevalence-lookup-class-slot
+                         using-class slotd value)))))
+
 (defun check-lookup-finds-object (obj)
   (dolist (slotd (set-difference
                   (c2mop:class-slots (class-of obj))
                   (nil-key-slots obj)))
-    (let ((slot-name (c2mop:slot-definition-name slotd))
-          (using-class
-            (ccase (key slotd)
-              ((:index :precedence-unique)
-               (find-slot-defining-class (class-of obj) slotd))
-              (:class-unique
-               (class-of obj)))))
-      (5am:is (member obj
-                      (mklist (prevalence-lookup-class-slot
-                               using-class
-                               slotd
-                               (slot-value obj slot-name))))
-              "Can't find ~S for ~S ~S~%" obj slotd (slot-value obj slot-name)))))
+    (let* ((slot-name (c2mop:slot-definition-name slotd))
+           (slot-value (slot-value obj slot-name)))
+      (5am:is-true (check-lookup-finds-object-slotd-value-p obj slotd slot-value)
+                   "Can't find ~S for ~S ~S~%" obj slotd slot-value))))
 
 ;;;; Tests for Prevalence System
 
@@ -272,7 +271,10 @@
                               (slotds->values-map sb)))
         (check-lookup-finds-object sb)
 
-
-
-        ;; Add tests to see that sb is properly removed for the old-values
-        ))))
+        (dolist (slotd->value old-values)
+          (destructuring-bind (slotd . value) slotd->value
+            (when (and (key slotd)
+                       (not (funcall (equality slotd)
+                                     value
+                                     (slot-value sb (c2mop:slot-definition-name slotd)))))
+              (5am:is-false (check-lookup-finds-object-slotd-value-p sb slotd value)))))))))

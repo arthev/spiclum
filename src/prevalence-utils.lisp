@@ -408,13 +408,12 @@
          (slotds (c2mop:class-slots (class-of instance)))
          (updated-slots (remove-if (lambda (slotd)
                                      (let ((slot-name (c2mop:slot-definition-name slotd)))
-                                       (or (not (slot-boundp instance slot-name))
-                                           (multiple-value-bind (value present-p)
-                                               (gethash slotd old-values)
-                                             (or (not present-p)
-                                                 (funcall (equality slotd)
-                                                          value
-                                                          (slot-value instance slot-name)))))))
+                                       (multiple-value-bind (value present-p)
+                                           (gethash slotd old-values)
+                                         (when (and present-p (slot-boundp instance slot-name))
+                                           (funcall (equality slotd)
+                                                    value
+                                                    (slot-value instance slot-name))))))
                                    slotds)))
     (with-recursive-locks (apply #'prevalence-slot-locks (class-of instance) updated-slots)
       (dolist (slotd updated-slots)
@@ -435,12 +434,9 @@
           (when (key slotd)
             (multiple-value-bind (old-value present-p)
                 (gethash slotd old-values)
-              (when (and present-p
-                         (not (funcall (equality slotd)
-                                       old-value
-                                       (slot-value instance (c2mop:slot-definition-name slotd)))))
+              (when present-p
                 (prevalence-remove-class-slot
-                 (class-of instance) slotd (gethash slotd old-values) instance)))))))
+                 (class-of instance) slotd old-value instance)))))))
     (if problem-slots
         (progn
           (with-ignored-prevalence
