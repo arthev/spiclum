@@ -247,6 +247,30 @@
 ;; Atomic setf for if multiple setfs are part of a transaction,
 ;; so if we are persisting-p or prevalencing-p can be trusted.
 
+(defmethod canonicalize-direct-slot-property-value (property value)
+  (declare (ignore property))
+  value)
+
+(defmethod canonicalize-direct-slot-property-value ((property (eql :equality)) value)
+  (if (functionp value)
+      value
+      (destructuring-bind (_ fn-name)
+          value
+        (declare (ignore _))
+        (symbol-function fn-name))))
+
+(defun canonicalize-direct-slot (direct-slot-plist)
+  (loop for (property value) on direct-slot-plist by #'cddr
+        collect property
+        collect (canonicalize-direct-slot-property-value property value)))
+
+(defmethod c2mop:ensure-class-using-class ((class prevalence-class)
+                                           name &rest args
+                                           &key direct-slots
+                                           &allow-other-keys)
+  (let ((updated-slots (mapcar #'canonicalize-direct-slot direct-slots)))
+    (apply #'call-next-method class name
+           (replace-property :direct-slots updated-slots args))))
 
 (defun acceptable-persistent-slot-value-type-p (new-value)
   (%acceptable-persistent-slot-value-type-p (metaclass-of new-value) new-value))

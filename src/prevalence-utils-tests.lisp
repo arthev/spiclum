@@ -6,12 +6,12 @@
   ((pu-top
     :initarg :pu-top
     :key :precedence-unique
-    :equality equal
+    :equality #'equal
     :accessor pu-top)
    (i-top
     :initarg :i-top
     :key :index
-    :equality equalp
+    :equality #'equalp
     :accessor i-top)
    (cu-top
     :initarg :cu-top
@@ -25,7 +25,7 @@
   ((pu-left
     :initarg :pu-left
     :key :precedence-unique
-    :equality equal
+    :equality #'equal
     :accessor pu-left)
    (middle
     :initarg :middle
@@ -36,7 +36,7 @@
   ((pu-right
     :initarg :pu-right
     :key :precedence-unique
-    :equality equal
+    :equality #'equal
     :accessor pu-right)
    (middle
     :initarg :middle
@@ -47,7 +47,7 @@
   ((i-bottom
     :initarg :i-bottom
     :key :index
-    :equality equalp
+    :equality #'equalp
     :accessor i-bottom)))
 
 
