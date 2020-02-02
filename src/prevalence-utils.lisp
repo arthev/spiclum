@@ -6,26 +6,6 @@
   ()
   (:documentation "Meta-class for persistent objects using prevalence."))
 
-(defmethod c2mop:validate-superclass ((class prevalence-class)
-                                      (superclass standard-class))
-  "Just boilerplate declaring metaclass compatibility."
-  t)
-
-(defclass prevalence-object ()
-  ()
-  (:metaclass prevalence-class)
-  (:documentation "Class for prevalent objects to inherit, to specialize on
-                   reinitialize-instance etc."))
-
-(defmacro defpclass (class-name superclasses slot-specifiers &rest class-options)
-  (when (find :metaclass class-options :key #'car)
-    (error "DEFPCLASS uses implicit metaclass PREVALENCE-CLASS,~%~
-            but an explicit metaclass was provided for ~S" class-name))
-  `(defclass ,class-name (,@superclasses prevalence-object)
-     ,slot-specifiers
-     ,@class-options
-     (:metaclass prevalence-class)))
-
 ;; NOTE: Since canonical IDs for each persistent object will be necessary
 ;;   to ensure a coherent universe, we have another instance where
 ;;   an :allocation :subclass option for a slot would be useful.
@@ -152,7 +132,9 @@
                  direct-slot-definitions
                  :key #'c2mop:slot-definition-name)))
     (setf (key effective-slot-definition)
-          (key direct-slot-definition))
+          (key direct-slot-definition)
+          (equality effective-slot-definition)
+          (equality direct-slot-definition))
     effective-slot-definition))
 
 (defun class-x-key-slots (instance-or-class key-type)
@@ -237,6 +219,11 @@
   `(let ((*persisting-p* nil)
          (*prevalencing-p* nil))
      ,@body))
+
+(defmethod c2mop:validate-superclass ((class prevalence-class)
+                                      (superclass standard-class))
+  "Just boilerplate declaring metaclass compatibility."
+  t)
 
 ;; TODO: If we decide to allow mixins, then we probably
 ;; want to validate the reverse of the above too. (On a 'caveat emptor' basis.)
@@ -368,6 +355,23 @@
                 (slot-value instance slot-name)))))
     hash-table))
 
+;;;; 2. Prevalence-object section
+
+(defclass prevalence-object ()
+  ()
+  (:metaclass prevalence-class)
+  (:documentation "Class for prevalent objects to inherit, to specialize on
+                   reinitialize-instance etc."))
+
+(defmacro defpclass (class-name superclasses slot-specifiers &rest class-options)
+  (when (find :metaclass class-options :key #'car)
+    (error "DEFPCLASS uses implicit metaclass PREVALENCE-CLASS,~%~
+            but an explicit metaclass was provided for ~S" class-name))
+  `(defclass ,class-name (,@superclasses prevalence-object)
+     ,slot-specifiers
+     ,@class-options
+     (:metaclass prevalence-class)))
+
 (defmethod reinitialize-instance :around ((instance prevalence-object) &rest initargs &key &allow-other-keys)
   (declare (ignore initargs))
   (let* ((old-values (slotds->values-map instance))
@@ -433,7 +437,7 @@
 
 
 
-;;;; 2. PREVALENCE-SYSTEM section
+;;;; 3. PREVALENCE-SYSTEM section
 
 ;; The "canonical" lookup is on the unique IDs, so those are
 ;; also the lookups we can iterate to persist the whole store.

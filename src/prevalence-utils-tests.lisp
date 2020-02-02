@@ -6,12 +6,12 @@
   ((pu-top
     :initarg :pu-top
     :key :precedence-unique
-    :equality #'equal
+    :equality equal
     :accessor pu-top)
    (i-top
     :initarg :i-top
     :key :index
-    :equality #'equalp
+    :equality equalp
     :accessor i-top)
    (cu-top
     :initarg :cu-top
@@ -25,7 +25,7 @@
   ((pu-left
     :initarg :pu-left
     :key :precedence-unique
-    :equality #'equal
+    :equality equal
     :accessor pu-left)
    (middle
     :initarg :middle
@@ -36,7 +36,7 @@
   ((pu-right
     :initarg :pu-right
     :key :precedence-unique
-    :equality #'equal
+    :equality equal
     :accessor pu-right)
    (middle
     :initarg :middle
@@ -47,7 +47,7 @@
   ((i-bottom
     :initarg :i-bottom
     :key :index
-    :equality #'equalp
+    :equality equalp
     :accessor i-bottom)))
 
 
@@ -225,7 +225,7 @@
                      top (slot-by-name top 'pu-top) "top")
                     "something found under \"top\" after (setf (pu-top sb1) \"didgeridoo\")"))))
 
-(5am:test :setfing-unique-keyable-slot-throws-appropriate-error
+(5am:test :setfing-unique-keyable-slot-throws-appropriate-error1
   (with-fixture-system (sb1 _)
     (let ((*persisting-p* nil))
       (handler-case
@@ -271,6 +271,8 @@
         (5am:is-false (equalp old-values
                               (slotds->values-map sb)))
         (check-lookup-finds-object sb)
+
+
 
         ;; Add tests to see that sb is properly removed for the old-values
         ))))
