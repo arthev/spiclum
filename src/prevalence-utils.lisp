@@ -456,7 +456,32 @@
         '|persist-(lock): 'make-instance class initargs|)
     instance))
 
-
+(defmethod change-class :around ((instance prevalence-object) new-class-name
+                                 &rest initargs &key &allow-other-keys)
+  (let ((old-values (slotds->values-map instance))
+        (old-class (class-of instance))
+        (new-class (find-class new-class-name)))
+    (with-recursive-locks (append
+                           (apply #'prevalence-slot-locks
+                                  old-class
+                                  (c2mop:class-slots old-class))
+                           (apply #'prevalence-slot-locks
+                                  new-class
+                                  (c2mop:class-slots new-class)))
+      (handler-case
+          (progn
+            ;remove from all indexes
+            (with-ignored-prevalence
+                (call-next-method))
+            ;add to all indexes
+            '|serializer-call|
+            instance)
+        (error (e)
+          (with-ignored-prevalence
+              (call-next-method instance (class-name old-class)
+                                "old-init-args")) ; todo
+          ;add to all indexes
+          (values instance e))))))
 
 
 
