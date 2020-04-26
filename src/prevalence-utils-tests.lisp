@@ -231,13 +231,13 @@
           (progn
             (setf (cu-top sb1) 'nei)
             (5am:fail "(setf (cu-top sb1) 'nei) didn't throw expected error!"))
-        (non-unique-unique-key ()
+        (non-unique-unique-keys ()
           (5am:pass "(setf (cu-top sb1) 'nei) threw appropriate error, as expected")))
       (handler-case
           (progn
             (setf (pu-top sb1) "tip")
             (5am:fail "(setf (pu-top sb1) \"tip\") didn't throw expected error!"))
-        (non-unique-unique-key ()
+        (non-unique-unique-keys ()
           (5am:pass "(setf (pu-top sb1) \"tip\") threw appropriate error, as expected"))))))
 
 (5am:test :setf-to-equality-value-as-before-does-not-interfere

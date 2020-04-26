@@ -183,7 +183,7 @@
   (:documentation
    "Ancestor error for different breaches of prevalence constraints."))
 
-(define-condition non-unique-unique-key (prevalence-breach)
+(define-condition non-unique-unique-keys (prevalence-breach)
   ()
   (:report
    (lambda (condition stream)
@@ -322,13 +322,16 @@
           (persisted-p   nil)
           (completed-p   nil))
       (unwind-protect
+           ;; Ooh - but what if a slot is equality #'eq, but that object has
+           ;; been updated and someone's basically trying to 'write' the change?
            (unless (and slot-boundp
                         (funcall (equality slotd) new-value old-value))
              (prevalence-insert-class-slot class slotd new-value instance)
              (setf prevalenced-p t)
              '|persist-(lock)|
              (setf persisted-p t)
-             (prevalence-remove-class-slot class slotd old-value instance)
+             (when slot-boundp
+               (prevalence-remove-class-slot class slotd old-value instance))
              (setf completed-p t)
              (values-list results))
         (unless completed-p
@@ -514,6 +517,7 @@
     (unless slot-table
       (setf (gethash (c2mop:slot-definition-name slotd) class-table)
             (setf slot-table (make-hash-table :test (equality slotd)))))
+    ;; Can't we access e.g. indexes with nil as value, then?
     (if (null new-value)
         (remhash value slot-table)
         (setf (gethash value slot-table) new-value))))
@@ -523,7 +527,7 @@
   (flet ((unique-insert (using-class)
            (with-recursive-locks (prevalence-slot-locks using-class slotd)
              (if (prevalence-lookup-class-slot using-class slotd value)
-                 (error 'non-unique-unique-key
+                 (error 'non-unique-unique-keys
                         :breach-class using-class :breach-slots slotd :breach-values value)
                  (setf (prevalence-lookup-class-slot using-class slotd value) object)))))
     (ccase (key slotd)
