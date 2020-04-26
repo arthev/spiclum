@@ -79,6 +79,16 @@
       (values (class-of obj) t)
       (values (class-of (class-of obj)) nil)))
 
+(defun slotds->values-map (instance)
+  "Returns a hash-table mapping slotds to values. Unbound slots aren't keyed."
+  (let ((hash-table (make-hash-table)))
+    (dolist (slotd (c2mop:class-slots (class-of instance)))
+      (let ((slot-name (c2mop:slot-definition-name slotd)))
+        (when (slot-boundp instance slot-name)
+          (setf (gethash slotd hash-table)
+                (slot-value instance slot-name)))))
+    hash-table))
+
 ;;;; 0. KEYABLE-SLOT section
 
 (defun %member-of-legal-keyable-slot-key-values (x)
@@ -301,6 +311,7 @@
   t)
 
 (defun guarded-slot-value-using-class (class instance slotd)
+  ;; TODO: Might this be just guarded-slot-value?
   (if (slot-boundp instance (c2mop:slot-definition-name slotd))
       (values (c2mop:slot-value-using-class class instance slotd)
               t)
@@ -345,42 +356,21 @@
 
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)
   (declare (ignorable class initargs))
-  (let ((instance (with-ignored-prevalence (call-next-method))))
-    (let ((*persisting-p* nil)
-          (problem-slots nil)
-          (problem-values nil)
-          (slotds (c2mop:class-slots class)))
-      (with-recursive-locks (apply #'prevalence-slot-locks class slotds)
-        (dolist (slotd slotds)
-          (when (slot-boundp instance (c2mop:slot-definition-name slotd))
-            (let ((value (slot-value instance (c2mop:slot-definition-name slotd))))
-              (unless (prevalence-lookup-available-p class slotd value)
-                (push slotd problem-slots)
-                (push value problem-values)))))
-        (when (null problem-slots)
-          (dolist (slotd slotds)
-            (when (slot-boundp instance (c2mop:slot-definition-name slotd))
-              (prevalence-insert-class-slot
-               class
-               slotd
-               (slot-value instance (c2mop:slot-definition-name slotd))
-               instance)))))
-      (if problem-slots
-          (error 'non-unique-unique-keys :breach-class class
-                                         :breach-slots problem-slots
-                                         :breach-values problem-values)
-          '|persist-(lock): 'make-instance class initargs|))
+  (let ((instance (with-ignored-prevalence (call-next-method)))
+        problem-slots problem-values)
+    (with-recursive-locks (all-prevalence-slot-locks-for instance)
+      (multiple-value-bind (available-p inner-problem-slots inner-problem-values)
+          (prevalence-instance-slots-available-p instance)
+        (if available-p
+            (prevalence-insert-instance instance)
+            (setf problem-slots inner-problem-slots
+                  problem-values inner-problem-values))))
+    (if problem-slots
+        (error 'non-unique-unique-keys :breach-class class
+                                       :breach-slots problem-slots
+                                       :breach-values problem-values)
+        :persist) ;TEMPER '|persist-(lock): 'make-instance class initargs|))
     instance))
-
-(defun slotds->values-map (instance)
-  "Returns a hash-table mapping slotds to values. Unbound slots aren't keyed."
-  (let ((hash-table (make-hash-table)))
-    (dolist (slotd (c2mop:class-slots (class-of instance)))
-      (let ((slot-name (c2mop:slot-definition-name slotd)))
-        (when (slot-boundp instance slot-name)
-          (setf (gethash slotd hash-table)
-                (slot-value instance slot-name)))))
-    hash-table))
 
 ;;;; 2. Prevalence-object section
 
@@ -529,6 +519,18 @@
      (not (prevalence-lookup-class-slot
            (find-slot-defining-class class slotd) slotd value)))))
 
+(defun prevalence-instance-slots-available-p (instance)
+  (let ((class (class-of instance))
+        problem-slots problem-values)
+    (dolist (slotd (c2mop:class-slots class))
+      (let* ((slot-name (c2mop:slot-definition-name slotd))
+             (slot-value (ignore-errors (slot-value instance slot-name))))
+        (when (slot-boundp instance slot-name)
+          (unless (prevalence-lookup-available-p class slotd slot-value)
+            (push slotd problem-slots)
+            (push slot-value problem-values)))))
+    (values (not problem-slots) problem-slots problem-values)))
+
 (defun (setf prevalence-lookup-class-slot) (new-value class slotd value)
   "Sets the appropriate nested hash-lookup value,
    creating new tables as necessary.
@@ -550,19 +552,27 @@
 (defun prevalence-insert-class-slot (class slotd value object)
   (unless *prevalencing-p* (return-from prevalence-insert-class-slot :do-nothing))
   (flet ((unique-insert (using-class)
-           (with-recursive-locks (prevalence-slot-locks using-class slotd)
-             (if (prevalence-lookup-class-slot using-class slotd value)
-                 (error 'non-unique-unique-keys
-                        :breach-class using-class :breach-slots slotd :breach-values value)
-                 (setf (prevalence-lookup-class-slot using-class slotd value) object)))))
+           (if (prevalence-lookup-class-slot using-class slotd value)
+               (error 'non-unique-unique-keys
+                      :breach-class using-class :breach-slots slotd :breach-values value)
+               (setf (prevalence-lookup-class-slot using-class slotd value) object))))
     (ccase (key slotd)
       (:class-unique (unique-insert class))
       (:precedence-unique (unique-insert (find-slot-defining-class class slotd)))
       (:index
        (let ((slot-defining-class (find-slot-defining-class class slotd)))
-         (with-recursive-locks (prevalence-slot-locks class slotd)
-           (pushnew object (prevalence-lookup-class-slot slot-defining-class slotd value)))))
+         (pushnew object (prevalence-lookup-class-slot slot-defining-class slotd value))))
       ((nil) :do-nothing))))
+
+(defun prevalence-insert-instance (instance)
+  (let ((class (class-of instance)))
+    (dolist (slotd (c2mop:class-slots class))
+      (when (slot-boundp instance (c2mop:slot-definition-name slotd))
+        (prevalence-insert-class-slot
+         class
+         slotd
+         (slot-value instance (c2mop:slot-definition-name slotd))
+         instance)))))
 
 (defun prevalence-remove-class-slot (class slotd value object)
   (unless *prevalencing-p* (return-from prevalence-remove-class-slot :do-nothing))
@@ -580,13 +590,12 @@
        (unique-removal (find-slot-defining-class class slotd)))
       (:index
        (let ((slot-defining-class (find-slot-defining-class class slotd)))
-         (with-recursive-locks (prevalence-slot-locks slot-defining-class slotd)
-           (if (find object (prevalence-lookup-class-slot slot-defining-class slotd value))
-               (setf (prevalence-lookup-class-slot slot-defining-class slotd value)
-                     (remove object (prevalence-lookup-class-slot slot-defining-class slotd value)))
-               (error 'removing-nonexistant-entry
-                      :breach-class slot-defining-class :breach-slots slotd
-                      :breach-values value               :breach-object object))))))))
+         (if (find object (prevalence-lookup-class-slot slot-defining-class slotd value))
+             (setf (prevalence-lookup-class-slot slot-defining-class slotd value)
+                   (remove object (prevalence-lookup-class-slot slot-defining-class slotd value)))
+             (error 'removing-nonexistant-entry
+                    :breach-class slot-defining-class :breach-slots slotd
+                    :breach-values value               :breach-object object)))))))
 
 (defun prevalence-slot-locks (class &rest slotds)
   "Returns a list of locks associated with CLASS and SLOTDS."
@@ -605,6 +614,10 @@
                         (:precedence-unique (lock-for-slot-defining-class slotd))
                         ((nil) nil)))
                     slotds))))
+
+(defun all-prevalence-slot-locks-for (obj)
+  (let ((class (if (c2mop:classp obj) obj (class-of obj))))
+    (apply #'prevalence-slot-locks class (c2mop:class-slots class))))
 
 (defun find-slot-defining-class (class slotd)
   "Finds the most specific slot-defining-class by
