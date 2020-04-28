@@ -158,8 +158,8 @@
 (5am:test :prevalence-slot-locks-finds-locks-with-expected-names
   (let ((bottom (find-class 'bottom)))
     (destructuring-bind (pu-top-lock middle-lock i-bottom-lock)
-        (apply #'prevalence-slot-locks bottom (mapcar (lfix #'slot-by-name bottom)
-                                                      '(pu-top middle i-bottom)))
+        (prevalence-slot-locks bottom (mapcar (lfix #'slot-by-name bottom)
+                                              '(pu-top middle i-bottom)))
       (5am:is-true (search "TOP PU-TOP"      (lock-name pu-top-lock)))
       (5am:is-true (search "LEFT MIDDLE"     (lock-name middle-lock)))
       (5am:is-true (search "BOTTOM I-BOTTOM" (lock-name i-bottom-lock))))))

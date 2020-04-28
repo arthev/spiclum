@@ -406,7 +406,7 @@
                              (slot-value instance slot-name))))))
             (c2mop:class-slots (class-of instance))))
          problem-slots problem-values)
-    (with-recursive-locks (apply #'prevalence-slot-locks (class-of instance) updated-slots)
+    (with-recursive-locks (prevalence-slot-locks (class-of instance) updated-slots)
       (multiple-value-bind (available-p inner-problem-slots inner-problem-values)
           (prevalence-instance-slots-available-p instance :slots updated-slots)
         (if available-p
@@ -420,7 +420,7 @@
     (if problem-slots
         (error 'non-unique-unique-keys :breach-class (class-of instance)
                                        :breach-slots problem-slots
-                                       :breach-values problem-values))
+                                       :breach-values problem-values)
         :persist))) ;TEMPER
 
 (defmethod change-class :around ((instance prevalence-object) new-class-name
@@ -580,7 +580,7 @@
             (prevalence-remove-class-slot
              (class-of instance) slotd value instance)))))))
 
-(defun prevalence-slot-locks (class &rest slotds)
+(defun prevalence-slot-locks (class slotds)
   "Returns a list of locks associated with CLASS and SLOTDS."
   (flet ((lock-for-slot-defining-class (slotd)
            (let ((slot-defining-class (find-slot-defining-class class slotd)))
@@ -600,7 +600,7 @@
 
 (defun all-prevalence-slot-locks-for (obj)
   (let ((class (if (c2mop:classp obj) obj (class-of obj))))
-    (apply #'prevalence-slot-locks class (c2mop:class-slots class))))
+    (prevalence-slot-locks class (c2mop:class-slots class))))
 
 (defun find-slot-defining-class (class slotd)
   "Finds the most specific slot-defining-class by
