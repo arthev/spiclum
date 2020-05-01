@@ -278,3 +278,43 @@
                                      value
                                      (slot-value sb (c2mop:slot-definition-name slotd)))))
               (5am:is-false (check-lookup-finds-object-slotd-value-p sb slotd value)))))))))
+
+;; Three tests for change-class: One to make sure can be found in appropriate new lookups
+
+(5am:test :change-class-correctly-updates-lookups
+  (destructuring-bind (top left right bottom) (hierarchy)
+    (declare (ignorable top right bottom))
+    (let* ((*prevalence-system* (make-instance 'prevalence-system))
+           (obj (make-instance 'left :pu-left "initial-pu-left" :middle 'tja :pu-top 5
+                                     :i-top 19.0d0 :cu-top 'well :nil-top "didgeridoo"))
+           (class/slotd/value-map (list (list (find-slot-defining-class left (slot-by-name left 'pu-left))
+                                              (slot-by-name left 'pu-left)
+                                              (slot-value obj 'pu-left))
+                                        (list (find-slot-defining-class left (slot-by-name left 'middle))
+                                              (slot-by-name left 'middle)
+                                              (slot-value obj 'middle)))))
+      (check-lookup-finds-object obj)
+      (change-class obj 'right :pu-right "initial-pu-right")
+      (check-lookup-finds-object obj)
+      (dolist (mapping class/slotd/value-map)
+        (5am:is-false (apply #'prevalence-lookup-class-slot mapping))))))
+
+
+(5am:test :change-class-correctly-restores-instance-on-error
+  (destructuring-bind (top left right bottom) (hierarchy)
+    (declare (ignorable top bottom))
+    (let* ((*prevalence-system* (make-instance 'prevalence-system))
+           (left-obj  (make-instance 'left  :pu-left  "leftie" :middle 'tja))
+           (right-obj (make-instance 'right :pu-right "right"  :middle 'tja)))
+      (multiple-value-bind (instance error)
+          (change-class left-obj 'right :middle 'tja)
+        (5am:is (eq 'non-unique-unique-keys
+                    (type-of error)))
+        (5am:is (eq left-obj
+                    instance))
+        (5am:is (eq right-obj
+                    (prevalence-lookup-class-slot right (slot-by-name right 'middle) 'tja)))
+        (5am:is (eq left-obj
+                    (prevalence-lookup-class-slot left (slot-by-name left 'middle) 'tja)))
+        (5am:is (eq left-obj
+                    (prevalence-lookup-class-slot left (slot-by-name left 'pu-left) "leftie")))))))
