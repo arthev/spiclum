@@ -89,6 +89,11 @@
                 (slot-value instance slot-name)))))
     hash-table))
 
+(defmacro with-ignored-prevalence (&rest body)
+  `(let ((*persisting-p* nil)
+         (*prevalencing-p* nil))
+     ,@body))
+
 ;;;; 0. KEYABLE-SLOT section
 
 (defun %member-of-legal-keyable-slot-key-values (x)
@@ -225,10 +230,16 @@
 ;; Also seems like we'll need an additional point,
 ;; to remove instances from the prevalence system.
 
-(defmacro with-ignored-prevalence (&rest body)
-  `(let ((*persisting-p* nil)
-         (*prevalencing-p* nil))
-     ,@body))
+;; If we want to efficiently do nested deletions/removal, we
+;; need to track pointers to an object (which could be hooked in
+;; in (setf slot-value-using-class), obviously. And specify
+;; dependency etc.
+;; Alternatively, we can leave deletion patterns to user code.
+;; Not that hard to iterate slots and recursively delete, if
+;; that sort of cascade removal of e.g. a user is desired.
+;; The trouble, of course, is consistency. If you want to
+;; delete an object, what about all objects that hold pointers
+;; to it? Trouble that - what are those slot values now?
 
 (defmethod c2mop:validate-superclass ((class prevalence-class)
                                       (superclass standard-class))
@@ -389,9 +400,24 @@
      ,@class-options
      (:metaclass prevalence-class)))
 
+(defun update-instance-for-slotds->values-map (instance map)
+  "Given MAP, update all of INSTANCE's slot values to match the MAP.
+   This is done by setf slot-value, which means this is sensitive
+   to whether we're prevalencing or not."
+  (dolist (slotd (c2mop:class-slots (class-of instance)))
+    (multiple-value-bind (value present-p)
+        (gethash slotd map)
+      (if present-p
+          (setf (slot-value instance (c2mop:slot-definition-name slotd))
+                value)
+          (slot-makunbound instance (c2mop:slot-definition-name slotd))))))
+
 (defmethod reinitialize-instance :around ((instance prevalence-object) &rest initargs &key &allow-other-keys)
   (declare (ignore initargs))
   (let* ((old-values (slotds->values-map instance))
+         ;; what if this errors? what happens to the consistency?
+         ;; probably gotta restore old-values
+         ;; TEMPER
          (instance (with-ignored-prevalence (call-next-method)))
          (updated-slots
            (remove-if
@@ -423,29 +449,29 @@
                                        :breach-values problem-values)
         :persist))) ;TEMPER
 
-(defmethod change-class :around ((instance prevalence-object) new-class-name
+(defmethod change-class :around ((instance prevalence-object) (new-class prevalence-class)
                                  &rest initargs &key &allow-other-keys)
+  (declare (ignorable initargs))
   (let ((old-values (slotds->values-map instance))
-        (old-class (class-of instance))
-        (new-class (find-class new-class-name)))
-    (with-recursive-locks (append (all-prevalence-slot-locks-for old-class)
-                                  (all-prevalence-slot-locks-for new-class))
+        (old-class (class-of instance)))
+    (with-recursive-locks (union (all-prevalence-slot-locks-for old-class)
+                                 (all-prevalence-slot-locks-for new-class))
       (handler-case
           (progn
-            ;remove from all indexes
+            (prevalence-remove-instance instance)
             (with-ignored-prevalence
                 (call-next-method))
-            ;add to all indexes
+            (prevalence-insert-instance instance)
             '|serializer-call|
             instance)
         (error (e)
           (with-ignored-prevalence
-              (call-next-method instance (class-name old-class)
-                                "old-init-args")) ; todo
-          ;add to all indexes
+              (call-next-method instance old-class)
+            ;; We do this instead of anything more targetted,
+            ;; since initialization of slots can execute arbitrary code
+            (update-instance-for-slotds->values-map instance old-values))
+          (prevalence-insert-instance instance)
           (values instance e))))))
-
-
 
 ;;;; 3. PREVALENCE-SYSTEM section
 
