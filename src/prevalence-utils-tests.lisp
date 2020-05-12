@@ -306,15 +306,15 @@
     (let* ((*prevalence-system* (make-instance 'prevalence-system))
            (left-obj  (make-instance 'left  :pu-left  "leftie" :middle 'tja))
            (right-obj (make-instance 'right :pu-right "right"  :middle 'tja)))
-      (multiple-value-bind (instance error)
-          (change-class left-obj 'right :middle 'tja)
-        (5am:is (eq 'non-unique-unique-keys
-                    (type-of error)))
-        (5am:is (eq left-obj
-                    instance))
-        (5am:is (eq right-obj
-                    (prevalence-lookup-class-slot right (slot-by-name right 'middle) 'tja)))
-        (5am:is (eq left-obj
-                    (prevalence-lookup-class-slot left (slot-by-name left 'middle) 'tja)))
-        (5am:is (eq left-obj
-                    (prevalence-lookup-class-slot left (slot-by-name left 'pu-left) "leftie")))))))
+      (handler-case
+          (progn (change-class left-obj 'right :middle 'tja)
+                 (5am:fail "change-class call didn't throw expected error"))
+        (error (error)
+          (5am:is (eq 'non-unique-unique-keys
+                      (type-of error)))
+          (5am:is (eq right-obj
+                      (prevalence-lookup-class-slot right (slot-by-name right 'middle) 'tja)))
+          (5am:is (eq left-obj
+                      (prevalence-lookup-class-slot left (slot-by-name left 'middle) 'tja)))
+          (5am:is (eq left-obj
+                      (prevalence-lookup-class-slot left (slot-by-name left 'pu-left) "leftie"))))))))
