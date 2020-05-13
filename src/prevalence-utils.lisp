@@ -345,20 +345,21 @@
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)
   (declare (ignorable class initargs))
   (let ((instance (with-ignored-prevalence (call-next-method)))
-        problem-slots problem-values)
+        success-p)
     (with-recursive-locks (all-prevalence-slot-locks-for instance)
-      (multiple-value-bind (available-p inner-problem-slots inner-problem-values)
-          (prevalence-instance-slots-available-p instance)
-        (if available-p
-            (prevalence-insert-instance instance)
-            (setf problem-slots inner-problem-slots
-                  problem-values inner-problem-values))))
-    (if problem-slots
-        (error 'non-unique-unique-keys :breach-class class
-                                       :breach-slots problem-slots
-                                       :breach-values problem-values)
-        :persist) ;TEMPER '|persist-(lock): 'make-instance class initargs|))
-    instance))
+      (unwind-protect
+           (multiple-value-bind (available-p problem-slots problem-values)
+               (prevalence-instance-slots-available-p instance)
+             (if available-p
+                 (progn (prevalence-insert-instance instance)
+                        :persist ; TEMPER
+                        (setf success-p t)
+                        instance)
+                 (error 'non-unique-unique-keys :breach-class class
+                                                :breach-slots problem-slots
+                                                :breach-values problem-values)))
+        (unless success-p
+          (prevalence-remove-instance instance))))))
 
 ;;;; 2. Prevalence-object section
 
@@ -390,6 +391,8 @@
           (slot-makunbound instance (c2mop:slot-definition-name slotd))))))
 
 (defun compute-slot-diff-against-slotds->values-map (instance map)
+  ;; Might be we could improve on this by using a specialized struct
+  ;; instead of a hashtable for the map
   (remove-if
    (lambda (slotd)
      (let ((slot-name (c2mop:slot-definition-name slotd)))
@@ -462,9 +465,11 @@
              (with-ignored-prevalence
                  (call-next-method))
              (setf call-next-method-p t)
+             ;; Should probably mimick reinitialize-instance here
+             ;; by checking to report on all problem slots ;; TEMPER
              (prevalence-insert-instance instance)
              (setf prevalence-insert-p t)
-             '|serializer-call|
+             :persist ;; TEMPER
              (setf success-p t)
              instance)
         (unless success-p
@@ -473,8 +478,8 @@
           (when call-next-method-p
             (with-ignored-prevalence
                 (call-next-method instance old-class)
-              ;; We do this instead of anything more targetted,
-              ;; since initialization of slots can execute arbitrary code
+              ;; Simpler than constructing initargs for call-next-method,
+              ;; particularly since initializations can run arbitrary code
               (update-instance-for-slotds->values-map instance old-values)))
           (when prevalence-remove-p
             (prevalence-insert-instance instance)))))))
