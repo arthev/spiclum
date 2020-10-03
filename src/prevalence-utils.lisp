@@ -317,32 +317,33 @@ Must atomatically update indexes and persist as appropriate."
           (results (multiple-value-list (call-next-method)))
           (same-index-p (and slot-boundp
                              (funcall (equality slotd) new-value old-value)))
-          (prevalenced-p nil)
-          (removed-p     nil)
-          (completed-p   nil))
+          prevalenced-p removed-p success-p)
       (with-recursive-locks (prevalence-slot-locks class (list slotd))
         (unwind-protect
              (progn
                (unless same-index-p
-                 (prevalence-insert-class-slot class slotd new-value instance))
-               (setf prevalenced-p t)
-               (when (and slot-boundp (not same-index-p))
-                 (prevalence-remove-class-slot class slotd old-value instance))
-               (setf removed-p t)
+                 (prevalence-insert-class-slot class slotd new-value instance)
+                 (setf prevalenced-p t)
+                 (when slot-boundp
+                   (prevalence-remove-class-slot class slotd old-value instance)
+                   (setf removed-p t)))
                :persist ;TEMPER
-               (setf completed-p t)
+               (setf success-p t)
                (values-list results))
-          (unless completed-p
+          (unless success-p
             (when prevalenced-p
-              (unless same-index-p
-                (prevalence-remove-class-slot class slotd new-value instance))
-              (if slot-boundp
-                  (call-next-method old-value class instance slotd)
-                  (slot-makunbound instance (c2mop:slot-definition-name slotd))))
-            (when (and removed-p slot-boundp)
+              (prevalence-remove-class-slot class slotd new-value instance))
+            (if slot-boundp
+                (call-next-method old-value class instance slotd)
+                (slot-makunbound instance (c2mop:slot-definition-name slotd)))
+            (when removed-p
               (prevalence-insert-class-slot class slotd old-value instance))))))))
 
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)
+  "Makes the instance and inserts into the prevalence system as a transaction.
+
+If the transaction fails, remove it and return an error.
+Thus, zero references to the object."
   (declare (ignorable class initargs))
   (let ((instance (with-ignored-prevalence (call-next-method)))
         success-p)
