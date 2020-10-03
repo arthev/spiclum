@@ -298,13 +298,10 @@
     ((metaclass (eql (find-class 'prevalence-class))) new-value)
   t)
 
-(defun guarded-slot-value-using-class (class instance slotd)
-  ;; TODO: Might this be just guarded-slot-value?
-  (if (slot-boundp instance (c2mop:slot-definition-name slotd))
-      (values (c2mop:slot-value-using-class class instance slotd)
-              t)
-      (values nil
-              nil)))
+(defun guarded-slot-value (instance slot-name)
+  (if (slot-boundp instance slot-name)
+      (values (slot-value instance slot-name) t)
+      (values nil nil)))
 
 (defmethod (setf c2mop:slot-value-using-class) (new-value
                                                 (class prevalence-class)
@@ -315,7 +312,7 @@
 Must atomatically update indexes and persist as appropriate."
   (assert (acceptable-persistent-slot-value-type-p new-value))
   (multiple-value-bind (old-value slot-boundp)
-      (guarded-slot-value-using-class class instance slotd)
+      (guarded-slot-value instance (c2mop:slot-definition-name slotd))
     (let (;; CLHS specifies that setf'ing can return multiple values
           (results (multiple-value-list (call-next-method)))
           (same-index-p (and slot-boundp
@@ -328,7 +325,7 @@ Must atomatically update indexes and persist as appropriate."
              (unless same-index-p
                (prevalence-insert-class-slot class slotd new-value instance))
              (setf prevalenced-p t)
-             '|persist-(lock)|
+             :persist ;TEMPER
              (setf persisted-p t)
              (when (and slot-boundp (not same-index-p))
                (prevalence-remove-class-slot class slotd old-value instance))
@@ -393,8 +390,6 @@ Must atomatically update indexes and persist as appropriate."
           (slot-makunbound instance (c2mop:slot-definition-name slotd))))))
 
 (defun compute-slot-diff-against-slotds->values-map (instance map)
-  ;; Might be we could improve on this by using a specialized struct
-  ;; instead of a hashtable for the map
   (remove-if
    (lambda (slotd)
      (let ((slot-name (c2mop:slot-definition-name slotd)))
