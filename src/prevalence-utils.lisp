@@ -71,7 +71,7 @@
 ;;;; -1. Helpers
 
 (defun metaclass-of (obj)
-  "Returns the metaclass of OBJ as primarily value.
+  "Returns the metaclass of OBJ as primary value.
    Returns a secondary value indicating whether obj
    was a class-object (T) or not (nil).
    Probably assumes no metaclasses have metaclasses."
@@ -310,32 +310,34 @@
                                                 (class prevalence-class)
                                                 instance
                                                 slotd)
-  "Responsible for validation, calling the standard-class setf,
-   and for making and commiting a transaction."
+  "SETFs the NEW-VALUE of INSTANCE for SLOTD, as a transaction.
+
+Must atomatically update indexes and persist as appropriate."
   (assert (acceptable-persistent-slot-value-type-p new-value))
   (multiple-value-bind (old-value slot-boundp)
       (guarded-slot-value-using-class class instance slotd)
     (let (;; CLHS specifies that setf'ing can return multiple values
           (results (multiple-value-list (call-next-method)))
+          (same-index-p (and slot-boundp
+                             (funcall (equality slotd) new-value old-value)))
           (prevalenced-p nil)
           (persisted-p   nil)
           (completed-p   nil))
       (unwind-protect
-           ;; Ooh - but what if a slot is equality #'eq, but that object has
-           ;; been updated and someone's basically trying to 'write' the change?
-           (unless (and slot-boundp
-                        (funcall (equality slotd) new-value old-value))
-             (prevalence-insert-class-slot class slotd new-value instance)
+           (progn
+             (unless same-index-p
+               (prevalence-insert-class-slot class slotd new-value instance))
              (setf prevalenced-p t)
              '|persist-(lock)|
              (setf persisted-p t)
-             (when slot-boundp
+             (when (and slot-boundp (not same-index-p))
                (prevalence-remove-class-slot class slotd old-value instance))
              (setf completed-p t)
              (values-list results))
         (unless completed-p
           (when prevalenced-p
-            (prevalence-remove-class-slot class slotd new-value instance)
+            (unless same-index-p
+              (prevalence-remove-class-slot class slotd new-value instance))
             (if slot-boundp
                 (call-next-method old-value class instance slotd)
                 (slot-makunbound instance (c2mop:slot-definition-name slotd))))
