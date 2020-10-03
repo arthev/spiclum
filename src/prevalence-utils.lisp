@@ -318,28 +318,29 @@ Must atomatically update indexes and persist as appropriate."
           (same-index-p (and slot-boundp
                              (funcall (equality slotd) new-value old-value)))
           (prevalenced-p nil)
-          (persisted-p   nil)
+          (removed-p     nil)
           (completed-p   nil))
-      (unwind-protect
-           (progn
-             (unless same-index-p
-               (prevalence-insert-class-slot class slotd new-value instance))
-             (setf prevalenced-p t)
-             :persist ;TEMPER
-             (setf persisted-p t)
-             (when (and slot-boundp (not same-index-p))
-               (prevalence-remove-class-slot class slotd old-value instance))
-             (setf completed-p t)
-             (values-list results))
-        (unless completed-p
-          (when prevalenced-p
-            (unless same-index-p
-              (prevalence-remove-class-slot class slotd new-value instance))
-            (if slot-boundp
-                (call-next-method old-value class instance slotd)
-                (slot-makunbound instance (c2mop:slot-definition-name slotd))))
-          (when persisted-p
-            '|persist-reverse?|))))))
+      (with-recursive-locks (prevalence-slot-locks class (list slotd))
+        (unwind-protect
+             (progn
+               (unless same-index-p
+                 (prevalence-insert-class-slot class slotd new-value instance))
+               (setf prevalenced-p t)
+               (when (and slot-boundp (not same-index-p))
+                 (prevalence-remove-class-slot class slotd old-value instance))
+               (setf removed-p t)
+               :persist ;TEMPER
+               (setf completed-p t)
+               (values-list results))
+          (unless completed-p
+            (when prevalenced-p
+              (unless same-index-p
+                (prevalence-remove-class-slot class slotd new-value instance))
+              (if slot-boundp
+                  (call-next-method old-value class instance slotd)
+                  (slot-makunbound instance (c2mop:slot-definition-name slotd))))
+            (when (and removed-p slot-boundp)
+              (prevalence-insert-class-slot class slotd old-value instance))))))))
 
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)
   (declare (ignorable class initargs))
