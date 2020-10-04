@@ -457,6 +457,7 @@ This is a low-level utility for use by other parts of the prevalence-system."
                                (hash-store *prevalence-system*))))))
 
 (defun prevalence-slot-available-p (class slotd value)
+  "Checks whether the appropriate key is available."
   (ccase (key slotd)
     ((:index nil) t)
     (:class-unique
@@ -467,6 +468,7 @@ This is a low-level utility for use by other parts of the prevalence-system."
 
 (defun prevalence-instance-slots-available-p
     (instance &key (slots (c2mop:class-slots (class-of instance))))
+  "Checks whether SLOTS are all available as keys for INSTANCE."
   (let ((class (class-of instance))
         problem-slots problem-values)
     (dolist (slotd slots)
