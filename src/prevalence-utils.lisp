@@ -550,16 +550,18 @@ This is a low-level utility for use by other parts of the prevalence-system."
                     :breach-class slot-defining-class :breach-slots slotd
                     :breach-values value               :breach-object object)))))))
 
-(defun prevalence-remove-instance (instance &key slots values)
-  (let ((class (class-of instance))
-        (values (or values (slotds->values-map instance))))
-    (dolist (slotd (or slots (c2mop:class-slots class)))
+(defun prevalence-remove-instance
+    (instance &key
+                (slots (c2mop:class-slots (class-of instance)))
+                (values (slotds->values-map instance)))
+  (let ((class (class-of instance)))
+    (dolist (slotd slots)
       (when (key slotd)
         (multiple-value-bind (value present-p)
             (gethash slotd values)
           (when present-p
             (prevalence-remove-class-slot
-             (class-of instance) slotd value instance)))))))
+             class slotd value instance)))))))
 
 (defun prevalence-slot-locks (class slotds)
   "Returns a list of locks associated with CLASS and SLOTDS."
