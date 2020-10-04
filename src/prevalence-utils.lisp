@@ -1,28 +1,8 @@
 (in-package :spiclum)
 
-;; LEGEND: CONSIDER, SEE, TODO
-
 (defclass prevalence-class (standard-class)
   ()
   (:documentation "Meta-class for persistent objects using prevalence."))
-
-;; NOTE: Since canonical IDs for each persistent object will be necessary
-;;   to ensure a coherent universe, we have another instance where
-;;   an :allocation :subclass option for a slot would be useful.
-;;   (Of course, we can mimick the effect by including the slot in a wrapper
-;;   macro...)
-
-;; We can use some 'forbidden changes' signifier or something to react by refusing
-;; to re-setf any sch primary canonical ID slots, perhaps. Either they must be static,
-;; or we ust be able to register dependents in case of changes.
-
-;; But how to handle inheritance amongst the persistent objects?
-;; Just provide a query that specifies whether to look for the
-;; explicit class, or the class and its subclasses, duh.
-
-;; Uh-oh. How to handle :class allocated slots?
-;; Lookup becomes irrelevant. Serializes trivially, if redundantly.
-;; Maybe class-allocations with non-nil slot key are an error.
 
 (defclass keyable-slot (c2mop:standard-slot-definition)
   ((key
@@ -65,8 +45,6 @@
                  (bt:with-recursive-lock-held ((car locks))
                    (internal (cdr locks))))))
     (internal locks)))
-
-;; a get/ensure-hash-table sounds like a good abstractio
 
 ;;;; -1. Helpers
 
@@ -227,48 +205,15 @@
 
 ;;;; 1. PREVALENCE-CLASS section
 
-;; Seems like the main intercessory points are setfing values, instantiating,
-;; and reinstatiating (e.g. due to class change/redefinition).
-;; Also seems like we'll need an additional point,
-;; to remove instances from the prevalence system.
-
-;; If we want to efficiently do nested deletions/removal, we
-;; need to track pointers to an object (which could be hooked in
-;; in (setf slot-value-using-class), obviously. And specify
-;; dependency etc.
-;; Alternatively, we can leave deletion patterns to user code.
-;; Not that hard to iterate slots and recursively delete, if
-;; that sort of cascade removal of e.g. a user is desired.
-;; The trouble, of course, is consistency. If you want to
-;; delete an object, what about all objects that hold pointers
-;; to it? Trouble that - what are those slot values now?
-
 (defmethod c2mop:validate-superclass ((class prevalence-class)
                                       (superclass standard-class))
   "Just boilerplate declaring metaclass compatibility."
   t)
 
-;; TODO: If we decide to allow mixins, then we probably
-;; want to validate the reverse of the above too. (On a 'caveat emptor' basis.)
-;; :precedence-unique probably behaves weird with mixins.
-;; Even worse, mix-ins don't *have* to share metaclass, even!
-;; One possibility is to forbid non-shared metaclass inheritance.
-;; Can be checked during definining a class, obviously.
-;; The other option is to allow it, but then we have to filter for
-;; a lot of stuff...
-;; Can probably disallow for the time being (or design as if disallowed),
-;; because it'll give immediate errors if tried unless those filters are
-;; in place.
-
-;; To avoid problems with circularities, one option is to lazy up slots with
-;; persistent objects as values, and then force them during lookup.
-;; E.g. when serializing, serialize through lazy wrapper.
-;; Can then either:
-;; a) force during slot lookup (constant overhead)
-;; b) force all during initialization (slower initialization)
-
-;; Atomic setf for if multiple setfs are part of a transaction,
-;; so if we are persisting-p or prevalencing-p can be trusted.
+;; NOTE: If we want to allow mixins, we might want the reverse
+;; VALIDATE-SUPERCLASS method too. Probably on a 'caveat emptor' basis.
+;; Might be rather odd behaviour, particularly if we have different metaclasses
+;; on the mixins. For simplicity, designing as if disallowed.
 
 (defun acceptable-persistent-slot-value-type-p (new-value)
   (%acceptable-persistent-slot-value-type-p (metaclass-of new-value) new-value))
@@ -313,7 +258,7 @@ Must atomatically update indexes and persist as appropriate."
   (assert (acceptable-persistent-slot-value-type-p new-value))
   (multiple-value-bind (old-value slot-boundp)
       (guarded-slot-value instance (c2mop:slot-definition-name slotd))
-    (let (;; CLHS specifies that setf'ing can return multiple values
+    (let (;; CLHS specifies that SETF may return multiple values
           (results (multiple-value-list (call-next-method)))
           (same-index-p (and slot-boundp
                              (funcall (equality slotd) new-value old-value)))
@@ -674,5 +619,3 @@ Thus, zero references to the object."
                                            *prevalence-system* class-name slot-name)))))
            (prevalence-lookup-lock class-name slot-name))
           (t lock))))
-
-;;;; Serializing has to respect unbound slots
