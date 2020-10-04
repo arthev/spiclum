@@ -465,10 +465,11 @@ This is a low-level utility for use by other parts of the prevalence-system."
      (not (prevalence-lookup-class-slot
            (find-slot-defining-class class slotd) slotd value)))))
 
-(defun prevalence-instance-slots-available-p (instance &key slots)
+(defun prevalence-instance-slots-available-p
+    (instance &key (slots (c2mop:class-slots (class-of instance))))
   (let ((class (class-of instance))
         problem-slots problem-values)
-    (dolist (slotd (or slots (c2mop:class-slots class)))
+    (dolist (slotd slots)
       (let* ((slot-name (c2mop:slot-definition-name slotd))
              (slot-value (ignore-errors (slot-value instance slot-name))))
         (when (slot-boundp instance slot-name)
@@ -498,6 +499,7 @@ This is a low-level utility for use by other parts of the prevalence-system."
         (setf (gethash value slot-table) new-value))))
 
 (defun prevalence-insert-class-slot (class slotd value object)
+  "Inserts OBJECT into the HASH-STORE using appropriate strategy for SLOTD."
   (unless *prevalencing-p* (return-from prevalence-insert-class-slot :do-nothing))
   (flet ((unique-insert (using-class)
            (if (prevalence-lookup-class-slot using-class slotd value)
@@ -512,9 +514,10 @@ This is a low-level utility for use by other parts of the prevalence-system."
          (pushnew object (prevalence-lookup-class-slot slot-defining-class slotd value))))
       ((nil) :do-nothing))))
 
-(defun prevalence-insert-instance (instance &key slots)
+(defun prevalence-insert-instance
+    (instance &key (slots (c2mop:class-slots (class-of instance))))
   (let ((class (class-of instance)))
-    (dolist (slotd (or slots (c2mop:class-slots class)))
+    (dolist (slotd slots)
       (when (slot-boundp instance (c2mop:slot-definition-name slotd))
         (prevalence-insert-class-slot
          class
