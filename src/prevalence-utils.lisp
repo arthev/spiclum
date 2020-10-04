@@ -484,15 +484,11 @@ This is a low-level utility for use by other parts of the prevalence-system."
   "Sets the appropriate nested hash-lookup value,
    creating new tables as necessary.
    NOTE: Assumes any relevant locks are held already."
-  (let* ((class-table (gethash (class-name class)
-                               (hash-store *prevalence-system*)))
-         (slot-table (ignore-errors (gethash (c2mop:slot-definition-name slotd) class-table))))
-    (unless class-table
-      (setf (gethash (class-name class) (hash-store *prevalence-system*))
-            (setf class-table (make-hash-table))))
-    (unless slot-table
-      (setf (gethash (c2mop:slot-definition-name slotd) class-table)
-            (setf slot-table (make-hash-table :test (equality slotd)))))
+  (let* ((class-table (orf (gethash (class-name class)
+                                    (hash-store *prevalence-system*))
+                           (make-hash-table)))
+         (slot-table (orf (gethash (c2mop:slot-definition-name slotd) class-table)
+                          (make-hash-table :test (equality slotd)))))
     ;; Can't we access e.g. indexes with nil as value, then?
     ;; TEMPER - if there's no new value and we want to cease having an item available on the index,
     ;; maybe that's for slot-makunbound?
@@ -603,19 +599,17 @@ This is a low-level utility for use by other parts of the prevalence-system."
   "Looks up the look associted with CLASS-NAME and SLOT-NAME in
    *PREVALENCE-SYSTEM*'s lock-store. Creates entries and returns
    a newly-associated lock, if necessary."
-  (let* ((class-table (gethash class-name (lock-store *prevalence-system*)))
-         (lock (ignore-errors (gethash slot-name class-table))))
-    (cond ((not class-table)
-           (bt:with-lock-held ((lock-store-lock *prevalence-system*))
-             (unless (gethash class-name (lock-store *prevalence-system*))
-               (setf (gethash class-name (lock-store *prevalence-system*))
-                     (make-hash-table))))
-           (prevalence-lookup-lock class-name slot-name))
-          ((not lock)
-           (bt:with-lock-held ((lock-store-lock *prevalence-system*))
-             (unless (gethash slot-name class-table)
-               (setf (gethash slot-name class-table)
-                     (bt:make-lock (format nil "~A lock: ~A ~A"
-                                           *prevalence-system* class-name slot-name)))))
-           (prevalence-lookup-lock class-name slot-name))
-          (t lock))))
+  (let* ((class-table
+           (orf (gethash class-name (lock-store *prevalence-system*))
+                (bt:with-lock-held ((lock-store-lock *prevalence-system*))
+                  (lif (table (gethash class-name (lock-store *prevalence-system*)))
+                       table
+                       (make-hash-table)))))
+         (lock
+           (orf (gethash slot-name class-table)
+                (bt:with-lock-held ((lock-store-lock *prevalence-system*))
+                  (lif (lock (gethash slot-name class-table))
+                       lock
+                       (bt:make-lock (format nil "~A lock: ~A ~A"
+                                             *prevalence-system* class-name slot-name)))))))
+    lock))
