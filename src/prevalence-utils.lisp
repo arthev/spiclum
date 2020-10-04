@@ -316,6 +316,7 @@ Thus, zero references to the object."
                    reinitialize-instance etc."))
 
 (defmacro defpclass (class-name superclasses slot-specifiers &rest class-options)
+  "Programmer macro for defining prevalence classes."
   (when (find :metaclass class-options :key #'car)
     (error "DEFPCLASS uses implicit metaclass PREVALENCE-CLASS,~%~
             but an explicit metaclass was provided for ~S" class-name))
@@ -325,9 +326,7 @@ Thus, zero references to the object."
      (:metaclass prevalence-class)))
 
 (defun update-instance-for-slotds->values-map (instance map)
-  "Given MAP, update all of INSTANCE's slot values to match the MAP.
-   This is done by setf slot-value, which means this is sensitive
-   to whether we're prevalencing or not."
+  "Update all of INSTANCE's slot values to match MAP."
   (dolist (slotd (c2mop:class-slots (class-of instance)))
     (multiple-value-bind (value present-p)
         (gethash slotd map)
@@ -337,6 +336,7 @@ Thus, zero references to the object."
           (slot-makunbound instance (c2mop:slot-definition-name slotd))))))
 
 (defun compute-slot-diff-against-slotds->values-map (instance map)
+  "Returns list of slotds that differ between INSTANCE and MAP, by slot equality fns."
   (remove-if
    (lambda (slotd)
      (let ((slot-name (c2mop:slot-definition-name slotd)))
@@ -361,9 +361,7 @@ Thus, zero references to the object."
                        (unless success-p
                          (update-instance-for-slotds->values-map instance old-values)))))
          (updated-slots (compute-slot-diff-against-slotds->values-map instance old-values))
-         available-p
-         prevalence-insert-p
-         success-p)
+         available-p prevalence-insert-p success-p)
     (with-recursive-locks (prevalence-slot-locks (class-of instance) updated-slots)
       (unwind-protect
            (multiple-value-bind (temp-available-p problem-slots problem-values)
@@ -396,10 +394,7 @@ Thus, zero references to the object."
   (declare (ignorable initargs))
   (let ((old-values (slotds->values-map instance))
         (old-class (class-of instance))
-        prevalence-remove-p
-        call-next-method-p
-        prevalence-insert-p
-        success-p)
+        prevalence-remove-p call-next-method-p prevalence-insert-p success-p)
     (with-recursive-locks (union (all-prevalence-slot-locks-for old-class)
                                  (all-prevalence-slot-locks-for new-class))
       (unwind-protect
@@ -409,8 +404,6 @@ Thus, zero references to the object."
              (with-ignored-prevalence
                  (call-next-method))
              (setf call-next-method-p t)
-             ;; Should probably mimick reinitialize-instance here
-             ;; by checking to report on all problem slots ;; TEMPER
              (prevalence-insert-instance instance)
              (setf prevalence-insert-p t)
              :persist ;; TEMPER
@@ -449,10 +442,10 @@ Thus, zero references to the object."
 (defvar *prevalence-system* (make-instance 'prevalence-system))
 
 (defun prevalence-lookup-class-slot (class slotd value)
-  "Takes a prevalence CLASS and a SLOTD object, as well as a VALUE,
-   and looks up the relevant entries. The keys in the PREVALENCE-SYSTEM
-   HASH-STORE are the names of the class and slot, however, to ease
-   redefinitions."
+  "Looks up relevant entries for CLASS, SLOTD, VALUE.
+
+The keys in the PREVALENCE-SYSTEM HASH-STORE are the names of the CLASS and SLOTD.
+This is a low-level utility for use by other parts of the prevalence-system."
   (handler-bind ((type-error
                    (lambda (condition)
                      (when (and (eq nil (type-error-datum condition))
@@ -463,7 +456,7 @@ Thus, zero references to the object."
                       (gethash (class-name class)
                                (hash-store *prevalence-system*))))))
 
-(defun prevalence-lookup-available-p (class slotd value)
+(defun prevalence-slot-available-p (class slotd value)
   (ccase (key slotd)
     ((:index nil) t)
     (:class-unique
@@ -479,7 +472,7 @@ Thus, zero references to the object."
       (let* ((slot-name (c2mop:slot-definition-name slotd))
              (slot-value (ignore-errors (slot-value instance slot-name))))
         (when (slot-boundp instance slot-name)
-          (unless (prevalence-lookup-available-p class slotd slot-value)
+          (unless (prevalence-slot-available-p class slotd slot-value)
             (push slotd problem-slots)
             (push slot-value problem-values)))))
     (values (not problem-slots) problem-slots problem-values)))
