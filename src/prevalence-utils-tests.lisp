@@ -1,4 +1,4 @@
-(in-package :bmcg)
+(in-package :spiclum)
 
 ;;;; Class Hierarchy for Testing
 
