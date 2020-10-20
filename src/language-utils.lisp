@@ -76,3 +76,25 @@ Probably assumes no metaclasses have metaclasses."
 (defun direct-effective-slot-equivalence (direct-slot effective-slot)
   (eq (c2mop:slot-definition-name direct-slot)
       (c2mop:slot-definition-name effective-slot)))
+
+;;;; 2. Miscellaneous utils
+
+(defmacro as-transaction (actions &body body)
+  (let* ((gensyms (mapcar (ignore-args #'gensym) actions))
+         (success-sym (gensym "success"))
+         (dos-and-flags (loop for action in actions
+                              for gensym in gensyms
+                              collect (getf action :do)
+                              collect `(setf ,gensym t)))
+         (undos-in-whens (loop for action in (reverse actions)
+                               for gensym in (reverse gensyms)
+                               collect `(when ,gensym
+                                          ,(getf action :undo)))))
+    `(let ,`(,@gensyms ,success-sym)
+       (unwind-protect
+            (progn
+              ,@dos-and-flags
+              (setf ,success-sym t)
+              ,@body)
+         (unless ,success-sym
+           ,@undos-in-whens)))))
