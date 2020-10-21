@@ -36,32 +36,27 @@
                        (unless success-p
                          (update-instance-for-slotds->values-map instance old-values)))))
          (updated-slots (compute-slot-diff-against-slotds->values-map instance old-values))
-         available-p prevalence-insert-p success-p)
+         prevalence-insert-p prevalence-remove-p success-p)
     (with-recursive-locks (prevalence-slot-locks (class-of instance) updated-slots)
       (unwind-protect
-           (multiple-value-bind (temp-available-p problem-slots problem-values)
-               (prevalence-instance-slots-available-p instance :slots updated-slots)
-             (setf available-p temp-available-p)
-             (unless available-p
-               (error 'non-unique-unique-keys :breach-class (class-of instance)
-                                              :breach-slots problem-slots
-                                              :breach-values problem-values))
+           (progn
              (prevalence-insert-instance instance :slots updated-slots)
              (setf prevalence-insert-p t)
              (prevalence-remove-instance instance
                                          :slots updated-slots
                                          :values old-values)
+             (setf prevalence-remove-p t)
              :persist ;TEMPER
              (setf success-p t)
              instance)
         (unless success-p
-          (when available-p
+          (when prevalence-insert-p
             ;; since we use the same order as they were inserted in,
             ;; if we encounter an error, it should be at the first non-inserted slot,
             ;; which is presumably where we abandoned out anyhow.
             (ignore-errors (prevalence-remove-instance instance :slots updated-slots)))
           (update-instance-for-slotds->values-map instance old-values)
-          (when prevalence-insert-p ; as above
+          (when prevalence-remove-p ; as above
             (ignore-errors (prevalence-insert-instance instance :slots updated-slots))))))))
 
 (defmethod change-class :around ((instance prevalence-object) (new-class prevalence-class)
