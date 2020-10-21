@@ -134,15 +134,9 @@ Thus, zero references to the object."
         success-p)
     (with-recursive-locks (all-prevalence-slot-locks-for instance)
       (unwind-protect
-           (multiple-value-bind (available-p problem-slots problem-values)
-               (prevalence-instance-slots-available-p instance)
-             (if available-p
-                 (progn (prevalence-insert-instance instance)
-                        :persist ; TEMPER
-                        (setf success-p t)
-                        instance)
-                 (error 'non-unique-unique-keys :breach-class class
-                                                :breach-slots problem-slots
-                                                :breach-values problem-values)))
+           (progn (prevalence-insert-instance instance)
+                  :persist ; TEMPER
+                  (setf success-p t)
+                  instance)
         (unless success-p
           (prevalence-remove-instance instance))))))

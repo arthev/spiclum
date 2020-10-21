@@ -93,6 +93,12 @@ This is a low-level utility for use by other parts of the prevalence-system."
 (defun prevalence-insert-instance
     (instance &key (slots (c2mop:class-slots (class-of instance))))
   (let ((class (class-of instance)))
+    (multiple-value-bind (available-p problem-slots problem-values)
+        (prevalence-instance-slots-available-p instance :slots slots)
+      (unless available-p
+        (error 'non-unique-unique-keys :breach-class class
+                                       :breach-slots problem-slots
+                                       :breach-values problem-values)))
     (dolist (slotd slots)
       (when (slot-boundp instance (c2mop:slot-definition-name slotd))
         (prevalence-insert-class-slot
