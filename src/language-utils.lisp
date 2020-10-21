@@ -80,6 +80,18 @@ Probably assumes no metaclasses have metaclasses."
 ;;;; 2. Miscellaneous utils
 
 (defmacro as-transaction (actions &body body)
+  "Treats ACTIONS like a transaction in attempting to rollback if something goes awry.
+
+ACTIONS is a list of lists on form (:do [form] :undo [form]),
+where the :do forms get evaluated in turn. If there's a non-local
+exit from AS-TRANSACTION during the evaluation of the :do forms,
+the :undo forms get evaluated - starting from the one matching
+the last :do form that completed, and going 'up' through ACTIONS,
+:undo-ing the most recent :do form to complete first, then the
+second-most recent, and so forth.
+
+BODY is whatever to do once the ACTIONS have been carried out.
+Non-local exits from BODY do not trigger rollback as above."
   (let* ((gensyms (mapcar (ignore-args #'gensym) actions))
          (success-sym (gensym "success"))
          (dos-and-flags (loop for action in actions

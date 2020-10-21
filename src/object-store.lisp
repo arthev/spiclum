@@ -117,6 +117,7 @@ This is a low-level utility for use by other parts of the prevalence-system."
                       :breach-class using-class :breach-slots slotd
                       :breach-values value       :breach-object object))))
     (ccase (key slotd)
+      ((nil) nil)
       (:class-unique
        (unique-removal class))
       (:precedence-unique

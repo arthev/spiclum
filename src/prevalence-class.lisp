@@ -99,30 +99,18 @@ Must atomatically update indexes and persist as appropriate."
   (multiple-value-bind (old-value slot-boundp)
       (guarded-slot-value instance (c2mop:slot-definition-name slotd))
     (let (;; CLHS specifies that SETF may return multiple values
-          (results (multiple-value-list (call-next-method)))
-          (same-index-p (and slot-boundp
-                             (funcall (equality slotd) new-value old-value)))
-          prevalenced-p removed-p success-p)
+          (results (multiple-value-list (call-next-method))))
       (with-recursive-locks (prevalence-slot-locks class (list slotd))
-        (unwind-protect
-             (progn
-               (unless same-index-p
-                 (prevalence-insert-class-slot class slotd new-value instance)
-                 (setf prevalenced-p t)
-                 (when slot-boundp
-                   (prevalence-remove-class-slot class slotd old-value instance)
-                   (setf removed-p t)))
-               :persist ;TEMPER
-               (setf success-p t)
-               (values-list results))
-          (unless success-p
-            (when prevalenced-p
-              (prevalence-remove-class-slot class slotd new-value instance))
-            (if slot-boundp
-                (call-next-method old-value class instance slotd)
-                (slot-makunbound instance (c2mop:slot-definition-name slotd)))
-            (when removed-p
-              (prevalence-insert-class-slot class slotd old-value instance))))))))
+        (as-transaction
+            ((:do (when slot-boundp
+                    (prevalence-remove-class-slot class slotd old-value instance))
+              :undo (if slot-boundp
+                        (progn (call-next-method old-value class instance slotd)
+                               (prevalence-insert-class-slot class slotd old-value instance))
+                        (slot-makunbound instance (c2mop:slot-definition-name slotd))))
+             (:do (prevalence-insert-class-slot class slotd new-value instance)
+              :undo (prevalence-remove-class-slot class slotd new-value instance)))
+          (values-list results))))))
 
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)
   "Makes the instance and inserts into the prevalence system as a transaction.
@@ -130,13 +118,9 @@ Must atomatically update indexes and persist as appropriate."
 If the transaction fails, remove it and return an error.
 Thus, zero references to the object."
   (declare (ignorable class initargs))
-  (let ((instance (with-ignored-prevalence (call-next-method)))
-        success-p)
+  (let ((instance (with-ignored-prevalence (call-next-method))))
     (with-recursive-locks (all-prevalence-slot-locks-for instance)
-      (unwind-protect
-           (progn (prevalence-insert-instance instance)
-                  :persist ; TEMPER
-                  (setf success-p t)
-                  instance)
-        (unless success-p
-          (prevalence-remove-instance instance))))))
+      (as-transaction
+          ((:do (prevalence-insert-instance instance)
+            :undo (prevalence-remove-instance instance)))
+        instance))))
