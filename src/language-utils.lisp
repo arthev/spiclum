@@ -77,7 +77,23 @@ Probably assumes no metaclasses have metaclasses."
   (eq (c2mop:slot-definition-name direct-slot)
       (c2mop:slot-definition-name effective-slot)))
 
-;;;; 2. Miscellaneous utils
+;;;; 2. CLOS/MOP extensions
+
+(defmethod c2mop:ensure-class-using-class :around (class name &rest args &key &allow-other-keys)
+  ;; find the metaclass arg in args and also make args then not contain that one
+  ;; provide a wrapper around call-next-method
+  ;; call new method as appropriate.
+  'todo)
+
+;; WTF two name args??
+(defgeneric ensure-class-for-metaclass (metaclass class name ;also some thing to accept the call-next-method wrapper
+                                        &key direct-default-initargs direct-slots direct-superclasses name)
+  (:documentation "Extend the MOP since ENSURE-CLASS-USING-CLASS doesn't allow specializing on the metaclass."))
+
+
+
+
+;;;; 3. Miscellaneous utils
 
 (defmacro as-transaction (actions &body body)
   "Treats ACTIONS like a transaction in attempting to rollback if something goes awry.
@@ -94,14 +110,13 @@ BODY is whatever to do once the ACTIONS have been carried out.
 Non-local exits from BODY do not trigger rollback as above."
   (let* ((gensyms (mapcar (ignore-args #'gensym) actions))
          (success-sym (gensym "success"))
-         (dos-and-flags (loop for action in actions
-                              for gensym in gensyms
-                              collect (getf action :do)
-                              collect `(setf ,gensym t)))
-         (undos-in-whens (loop for action in (reverse actions)
-                               for gensym in (reverse gensyms)
-                               collect `(when ,gensym
-                                          ,(getf action :undo)))))
+         (dos-and-flags (mapappend (lambda (action gensym)
+                                     `(,(getf action :do)
+                                       (setf ,gensym t)))
+                                   actions gensyms))
+         (undos-in-whens (mapcar (lambda (action gensym)
+                                   `(when ,gensym ,(getf action :undo)))
+                                 (reverse actions) (reverse gensyms))))
     `(let ,`(,@gensyms ,success-sym)
        (unwind-protect
             (progn
