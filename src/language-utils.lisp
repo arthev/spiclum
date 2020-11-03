@@ -58,12 +58,13 @@ Probably assumes no metaclasses have metaclasses."
           (slot-makunbound instance (c2mop:slot-definition-name slotd))))))
 
 (defun guarded-slot-value (instance slot-name)
+  "Like SLOT-VALUE: doesn't error; secondary value indicates whether the slot is bound."
   (if (slot-boundp instance slot-name)
       (values (slot-value instance slot-name) t)
       (values nil nil)))
 
 (defun find-slot-defining-class (class slotd)
-  "Finds the most specific slot-defining-class by
+  "Find the most specific slot-defining-class by
    searching through CLASS's precedence list until
    the first hit for a direct-slot-definition."
   (assert slotd)
@@ -79,19 +80,50 @@ Probably assumes no metaclasses have metaclasses."
 
 ;;;; 2. CLOS/MOP extensions
 
-(defmethod c2mop:ensure-class-using-class :around (class name &rest args &key &allow-other-keys)
-  ;; find the metaclass arg in args and also make args then not contain that one
-  ;; provide a wrapper around call-next-method
-  ;; call new method as appropriate.
-  'todo)
+;; Let's hack the desired symbol for now
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (intern "ENSURE-CLASS-USING-METACLASS" 'c2mop)
+  (export (find-symbol "ENSURE-CLASS-USING-METACLASS" 'c2mop) 'c2mop))
 
-;; WTF two name args??
-(defgeneric ensure-class-for-metaclass (metaclass class name ;also some thing to accept the call-next-method wrapper
-                                        &key direct-default-initargs direct-slots direct-superclasses name)
-  (:documentation "Extend the MOP since ENSURE-CLASS-USING-CLASS doesn't allow specializing on the metaclass."))
+(defgeneric c2mop:ensure-class-using-metaclass
+    (metaclass class name
+     &key direct-default-initargs direct-slots direct-superclasses %ecuc-method &allow-other-keys)
+  (:documentation "Extend the MOP since ENSURE-CLASS-USING-CLASS doesn't allow specializing on the metaclass.
 
+%ECUC-METHOD should be a lambda that wraps CALL-NEXT-METHOD in ENSURE-CLASS-USING-CLASS, so that we
+can leave the 'main body of work' in the same place as before. This is an implementation hack.
+See the :around method on ENSURE-CLASS-USING-CLASS. The base method for ENSURE-CLASS-USING-METACLASS
+just funcalls %ECUC-METHOD appropriately."))
 
+(defmethod c2mop:ensure-class-using-class :around
+    (class name &rest args &key (metaclass 'standard-class) &allow-other-keys)
+  (assert (or (symbolp metaclass) (c2mop:classp metaclass)))
+  (let ((metaclass (if (symbolp metaclass) (find-class metaclass) metaclass))
+        (%ecuc-method
+          (lambda (class name &rest internal-args &key direct-default-initargs direct-slots direct-superclasses metaclass &allow-other-keys)
+            (apply #'call-next-method
+                   class
+                   name
+                   :direct-default-initargs direct-default-initargs
+                   :direct-slots direct-slots
+                   :direct-superclasses direct-superclasses
+                   :metaclass metaclass
+                   ;; And, so we'll capture implementation-specific extras:
+                   (append (remove-property :%ecuc-method internal-args)
+                           args)))))
+    (apply #'c2mop:ensure-class-using-metaclass metaclass class name :%ecuc-method %ecuc-method args)))
 
+(defmethod c2mop:ensure-class-using-metaclass
+    (metaclass class name
+     &rest args &key direct-default-initargs direct-slots direct-superclasses %ecuc-method &allow-other-keys)
+  (apply %ecuc-method
+         class
+         name
+         :direct-default-initargs direct-default-initargs
+         :direct-slots direct-slots
+         :direct-superclasses direct-superclasses
+         :metaclass metaclass
+         args))
 
 ;;;; 3. Miscellaneous utils
 
