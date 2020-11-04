@@ -1,10 +1,18 @@
 (in-package :spiclum)
 
-;; The "canonical" lookup is on the unique IDs, so those are
-;; also the lookups we can iterate to persist the whole store.
+;;;; 0. Basic definitions
+
+;; The "canonical" basic lookup is on the unique IDs, so those
+;; are also the lookups we can iterate to persist the whole store.
 
 (defclass prevalence-system ()
-  ((hash-store
+  ((uuid-seed
+    :initform 0
+    :accessor uuid-seed)
+   (uuid-seed-lock
+    :initform (bt:make-lock "uuid-seed-lock")
+    :reader uuid-seed-lock)
+   (hash-store
     :initform (make-hash-table)
     :reader hash-store)
    (lock-store
@@ -20,6 +28,12 @@
   "Toggle for whether to update the object store")
 
 (defvar *prevalence-system* (make-instance 'prevalence-system))
+
+(defun generate-uuid-for-object-store ()
+  (bt:with-recursive-lock-held ((uuid-seed-lock *prevalence-system*))
+    (incf (uuid-seed *prevalence-system*))))
+
+;;;; 1. Lookup
 
 (defun prevalence-lookup-class-slot (class slotd value)
   "Looks up relevant entries for CLASS, SLOTD, VALUE.
@@ -74,6 +88,8 @@ This is a low-level utility for use by other parts of the prevalence-system."
             (push slot-value problem-values)))))
     (values (not problem-slots) problem-slots problem-values)))
 
+;;;; 2. Insertion
+
 (defun prevalence-insert-class-slot (class slotd value object)
   "Inserts OBJECT into the HASH-STORE using appropriate strategy for SLOTD."
   (unless *prevalencing-p* (return-from prevalence-insert-class-slot :do-nothing))
@@ -106,6 +122,8 @@ This is a low-level utility for use by other parts of the prevalence-system."
          slotd
          (slot-value instance (c2mop:slot-definition-name slotd))
          instance)))))
+
+;;;; 3. Removal
 
 (defun prevalence-remove-class-slot (class slotd value object)
   (unless *prevalencing-p* (return-from prevalence-remove-class-slot :do-nothing))
@@ -143,6 +161,8 @@ This is a low-level utility for use by other parts of the prevalence-system."
           (when present-p
             (prevalence-remove-class-slot
              class slotd value instance)))))))
+
+;;;; 4. Locks
 
 (defun prevalence-slot-locks (class slotds)
   "Returns a list of locks associated with CLASS and SLOTDS."

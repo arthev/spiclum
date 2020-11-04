@@ -1,7 +1,10 @@
 (in-package :spiclum)
 
 (defclass prevalence-object ()
-  ()
+  ((uuid
+    :initform (generate-uuid-for-object-store)
+    :key :precedence-unique
+    :equality #'eql))
   (:metaclass prevalence-class)
   (:documentation "Class for prevalent objects to inherit, to specialize on
                    reinitialize-instance etc."))
