@@ -13,6 +13,7 @@
                (:file "src/conditions")
                (:file "src/keyable-slot")
                (:file "src/object-store")
+               (:file "src/queries")
                (:file "src/serialization")
                (:file "src/prevalence-class")
                (:file "src/prevalence-object")
