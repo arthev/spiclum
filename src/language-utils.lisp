@@ -20,12 +20,10 @@ Implemented for: SBCL"
 Usage of bt:with-recursive-lock-held probably inefficient
 compared with bt:acquire-recursive-lock. But :bordeaux-threads
 don't support that for SBCL."
-  (labels ((internal (locks)
-             (if (endp locks)
-                 (funcall body)
-                 (bt:with-recursive-lock-held ((car locks))
-                   (internal (cdr locks))))))
-    (internal locks)))
+  (if (endp locks)
+      (funcall body)
+      (bt:with-recursive-lock-held ((car locks))
+        (call-with-recursive-locks (cdr locks) body))))
 
 ;;;; 1. CLOS/MOP utils
 
