@@ -3,6 +3,8 @@
 (defclass prevalence-object ()
   ((uuid
     :initform (generate-uuid-for-object-store)
+    :initarg :uuid
+    :reader uuid
     :key :precedence-unique
     :equality #'eql))
   (:metaclass prevalence-class)
