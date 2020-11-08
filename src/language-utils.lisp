@@ -98,13 +98,10 @@ just funcalls %ECUC-METHOD appropriately."))
   (assert (or (symbolp metaclass) (c2mop:classp metaclass)))
   (let ((metaclass (if (symbolp metaclass) (find-class metaclass) metaclass))
         (%ecuc-method
-          (lambda (class name &rest internal-args &key direct-default-initargs direct-slots direct-superclasses metaclass &allow-other-keys)
+          (lambda (class name &rest internal-args &key metaclass &allow-other-keys)
             (apply #'call-next-method
                    class
                    name
-                   :direct-default-initargs direct-default-initargs
-                   :direct-slots direct-slots
-                   :direct-superclasses direct-superclasses
                    :metaclass metaclass
                    ;; And, so we'll capture implementation-specific extras:
                    (append (remove-property :%ecuc-method internal-args)
@@ -113,13 +110,10 @@ just funcalls %ECUC-METHOD appropriately."))
 
 (defmethod c2mop:ensure-class-using-metaclass
     (metaclass class name
-     &rest args &key direct-default-initargs direct-slots direct-superclasses %ecuc-method &allow-other-keys)
+     &rest args &key)
   (apply %ecuc-method
          class
          name
-         :direct-default-initargs direct-default-initargs
-         :direct-slots direct-slots
-         :direct-superclasses direct-superclasses
          :metaclass metaclass
          args))
 
