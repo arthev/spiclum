@@ -124,3 +124,46 @@ Thus, zero references to the object."
           ((:do (prevalence-insert-instance instance)
             :undo (prevalence-remove-instance instance)))
         instance))))
+
+(defvar *instances-affected-by-redefinition* nil)
+
+(defmethod c2mop:ensure-class-using-metaclass
+    ((metaclass prevalence-class) (class null) name &rest args &key)
+  (let ((updated-class (call-next-method)))
+    (apply #'register-last-class-definition metaclass class name args)
+    updated-class))
+
+(defmethod c2mop:ensure-class-using-metaclass
+    ((metaclass prevalence-class) class name &rest args &key)
+  (with-recursive-locks (all-prevalence-slot-locks-for class)
+    (let* ((instances (find-all class))
+           (slotds->values-maps (let ((ht (make-hash-table :test #'eq)))
+                                  (dolist (instance instances)
+                                    (setf (gethash instance ht)
+                                          (slotds->values-map instance)))
+                                  ht))
+           (*instances-affected-by-redefinition* instances))
+      (as-transaction
+          ((:do (prevalence-remove-instances instances)
+            :undo (prevalence-insert-instances instances))
+           ;; CLASS (being non-nil) should be the return value of CALL-NEXT-METHOD
+           (:do (with-ignored-prevalence (call-next-method))
+            :undo (with-ignored-prevalence
+                    ;; Might need some special-handling of %ECUC-METHOD
+                    (apply #'call-next-method (last-class-definition metaclass class name))
+                    (dolist (instance instances)
+                      (update-instance-for-slotds->values-map
+                       instance (gethash instance slotds->values-maps)))))
+           (:do (prevalence-insert-instances instances)
+            :undo (prevalence-remove-instances instances)))
+        (apply #'register-last-class-definition metaclass class name args)
+        class))))
+
+(defmethod make-instances-obsolete ((class prevalence-class))
+  "Eagerly updates instances of CLASS, so ENSURE-CLASS-USING-METACLASS can be transactional."
+  (call-next-method)
+  (dolist (instance *instances-affected-by-redefinition*)
+    ;; We don't have the argument list for UPDATE-INSTANCE-FOR-REDEFINED-CLASS
+    ;; on hand - but we know that instances will update when we try to access
+    ;; slot-values. Hence we do precisely that, to force an update.
+    (slot-values instance)))
