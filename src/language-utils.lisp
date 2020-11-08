@@ -110,7 +110,7 @@ just funcalls %ECUC-METHOD appropriately."))
 
 (defmethod c2mop:ensure-class-using-metaclass
     (metaclass class name
-     &rest args &key)
+     &rest args &key %ecuc-method &allow-other-keys)
   (apply %ecuc-method
          class
          name

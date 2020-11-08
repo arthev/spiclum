@@ -123,6 +123,19 @@ This is a low-level utility for use by other parts of the prevalence-system."
          (slot-value instance (c2mop:slot-definition-name slotd))
          instance)))))
 
+(defun prevalence-insert-instances (instances)
+  (let (finished current)
+    (unwind-protect
+         (dolist (instance instances)
+           (setf current instance)
+           (prevalence-insert-instance instance)
+           (push instance finished))
+      (unless (= (length instances) (length finished))
+        (prevalence-remove-instances finished)
+        (handler-case
+            (prevalence-remove-instance current)
+          (removing-nonexistant-entry ())))))) ; Gobble
+
 ;;;; 3. Removal
 
 (defun prevalence-remove-class-slot (class slotd value object)
@@ -161,6 +174,19 @@ This is a low-level utility for use by other parts of the prevalence-system."
           (when present-p
             (prevalence-remove-class-slot
              class slotd value instance)))))))
+
+(defun prevalence-remove-instances (instances)
+  (let (finished current)
+    (unwind-protect
+         (dolist (instance instances)
+           (setf current instance)
+           (prevalence-remove-instance instance)
+           (push instance finished))
+      (unless (= (length instances) (length finished))
+        (prevalence-insert-instances finished)
+        (handler-case
+            (prevalence-insert-instance current)
+          (non-unique-unique-keys ())))))) ; Gobble
 
 ;;;; 4. Locks
 
