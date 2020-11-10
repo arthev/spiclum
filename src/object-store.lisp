@@ -231,6 +231,8 @@ This is a low-level utility for use by other parts of the prevalence-system."
 
 (defun all-prevalence-slot-locks-for (obj)
   (let ((class (if (c2mop:classp obj) obj (class-of obj))))
+    (unless (c2mop:class-finalized-p class)
+      (c2mop:finalize-inheritance class))
     (prevalence-slot-locks class (c2mop:class-slots class))))
 
 (defun prevalence-lookup-lock (class-name slot-name)

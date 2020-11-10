@@ -321,3 +321,82 @@
                       (prevalence-lookup-class-slot left (slot-by-name left 'middle) 'tja)))
           (5am:is (eq left-obj
                       (prevalence-lookup-class-slot left (slot-by-name left 'pu-left) "leftie"))))))))
+
+;;;; Let's test class (re)definition
+
+(5am:test :class-definition-registers-in-prevalence-system
+  (let ((*prevalence-system* (make-instance 'prevalence-system)))
+    (ignore-errors (setf (find-class 'class-definition-test-class) nil))
+    (5am:is (zerop (hash-table-count (class-definition-store *prevalence-system*))))
+    (eval '(defpclass class-definition-test-class ()
+            (a b c)))
+    (5am:is (plusp (hash-table-count (class-definition-store *prevalence-system*))))
+    (destructuring-bind (prototype class name &key metaclass direct-slots &allow-other-keys)
+        (gethash 'class-definition-test-class (class-definition-store *prevalence-system*))
+      (declare (ignorable name))
+      (5am:is (eq (class-of prototype)
+                  (find-class metaclass)))
+      (5am:is (null class))
+      (5am:is (null (set-exclusive-or
+                     '(a b c)
+                     (mapcar (rfix #'getf :name) direct-slots)))))
+    (eval '(defpclass class-definition-test-class ()
+            (a b c d e)))
+    (destructuring-bind (prototype class name &key metaclass direct-slots &allow-other-keys)
+        (gethash 'class-definition-test-class (class-definition-store *prevalence-system*))
+      (declare (ignorable name))
+      (5am:is (eq (class-of prototype)
+                  (find-class metaclass)))
+      (5am:is (eq class (find-class 'class-definition-test-class)))
+      (5am:is (null (set-exclusive-or
+                     '(a b c d e)
+                     (mapcar (rfix #'getf :name) direct-slots)))))))
+
+(5am:test :class-definition-updates-object-store-indexes
+  (let ((*prevalence-system* (make-instance 'prevalence-system)))
+    (ignore-errors (setf (find-class 'class-definition-test-class) nil))
+    (5am:is (zerop (hash-table-count (class-definition-store *prevalence-system*))))
+    (eval '(defpclass class-definition-test-class ()
+            ((a :initarg :a :key :index :equality #'equalp)
+             (b :initarg :b :key :precedence-unique :equality #'equalp)
+             (c :initarg :c :key :class-unique :equality #'equalp))))
+    (let* ((class (find-class 'class-definition-test-class))
+           (instance (make-instance 'class-definition-test-class
+                                    :a :a :b :b :c :c))
+           (a-slot (slot-by-name class 'a)))
+      (check-lookup-finds-object instance)
+      (eval '(defpclass class-definition-test-class ()
+              ((b :initarg :b :key :precedence-unique :equality #'equalp)
+               (c :initarg :c :key :class-unique :equality #'equalp)
+               (oof :initarg :oof :key :index :equality #'equalp))))
+      (check-lookup-finds-object instance)
+      (5am:is (null (prevalence-lookup-class-slot
+                     class a-slot :a))))))
+
+
+(5am:test :class-definition-errors-on-index-collision
+  (let ((*prevalence-system* (make-instance 'prevalence-system)))
+    (ignore-errors (setf (find-class 'class-definition-test-class) nil))
+    (5am:is (zerop (hash-table-count (class-definition-store *prevalence-system*))))
+    (eval '(defpclass class-definition-test-class ()
+            ((a :initarg :a))))
+    (5am:is (plusp (hash-table-count (class-definition-store *prevalence-system*))))
+    (check-lookup-finds-object (make-instance 'class-definition-test-class :a 5))
+    (check-lookup-finds-object (make-instance 'class-definition-test-class :a 5))
+    (5am:is (= 2
+               (length
+                (find-all
+                 (find-class 'class-definition-test-class)))))
+    (handler-case
+        (progn
+          (eval '(defpclass class-definition-test-class ()
+                  ((a :initarg :a
+                      :key :precedence-unique
+                      :equality #'eql))))
+          (5am:fail "Expected non-unique-unique keys error, but no error happened."))
+      (non-unique-unique-keys ()
+        (5am:pass "class redefinition resulted in expected error.")))
+    (5am:is (null (key
+                   (car
+                    (c2mop:class-direct-slots
+                     (find-class 'class-definition-test-class))))))))
