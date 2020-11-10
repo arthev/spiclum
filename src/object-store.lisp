@@ -12,6 +12,9 @@
    (uuid-seed-lock
     :initform (bt:make-lock "uuid-seed-lock")
     :reader uuid-seed-lock)
+   (class-definition-store
+    :initform (make-hash-table)
+    :reader class-definition-store)
    (hash-store
     :initform (make-hash-table)
     :reader hash-store)
@@ -33,7 +36,25 @@
   (bt:with-recursive-lock-held ((uuid-seed-lock *prevalence-system*))
     (incf (uuid-seed *prevalence-system*))))
 
-;;;; 1. Lookup
+;;;; 1. Class definition access
+
+(defun register-last-class-definition (metaclass class name &rest args)
+  (setf (gethash name (class-definition-store *prevalence-system*))
+        (list* metaclass class name args)))
+
+(defun last-class-definition (supplied-class supplied-name)
+  "Returns the previous class definition supplied to ensure-class-using-metaclass.
+
+Returns SUPPLIED-CLASS in place of the CLASS argument registered during the previous
+call, since CLASS might have been NIL during the previous call - and we'd get wrong
+behaviour if we supplied NIL once the class has been defined. If CLASS isn't NIL,
+then SUPPLIED-CLASS and CLASS should be EQ."
+  (destructuring-bind (metaclass class name &rest args)
+      (gethash supplied-name (class-definition-store *prevalence-system*))
+    (declare (ignore class))
+    (list* metaclass supplied-class name args)))
+
+;;;; 2. Instance Lookup
 
 (defun prevalence-lookup-class-slot (class slotd value)
   "Looks up relevant entries for CLASS, SLOTD, VALUE.
@@ -88,7 +109,7 @@ This is a low-level utility for use by other parts of the prevalence-system."
             (push slot-value problem-values)))))
     (values (not problem-slots) problem-slots problem-values)))
 
-;;;; 2. Insertion
+;;;; 3. Instance Insertion
 
 (defun prevalence-insert-class-slot (class slotd value object)
   "Inserts OBJECT into the HASH-STORE using appropriate strategy for SLOTD."
@@ -136,7 +157,7 @@ This is a low-level utility for use by other parts of the prevalence-system."
             (prevalence-remove-instance current)
           (removing-nonexistant-entry ())))))) ; Gobble
 
-;;;; 3. Removal
+;;;; 4. Instance Removal
 
 (defun prevalence-remove-class-slot (class slotd value object)
   (unless *prevalencing-p* (return-from prevalence-remove-class-slot :do-nothing))
@@ -188,7 +209,7 @@ This is a low-level utility for use by other parts of the prevalence-system."
             (prevalence-insert-instance current)
           (non-unique-unique-keys ())))))) ; Gobble
 
-;;;; 4. Locks
+;;;; 5. Locks
 
 (defun prevalence-slot-locks (class slotds)
   "Returns a list of locks associated with CLASS and SLOTDS."

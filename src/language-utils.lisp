@@ -85,7 +85,7 @@ Probably assumes no metaclasses have metaclasses."
 
 (defgeneric c2mop:ensure-class-using-metaclass
     (metaclass class name
-     &key direct-default-initargs direct-slots direct-superclasses %ecuc-method &allow-other-keys)
+     &key %ecuc-method &allow-other-keys)
   (:documentation "Extend the MOP since ENSURE-CLASS-USING-CLASS doesn't allow specializing on the metaclass.
 
 %ECUC-METHOD should be a lambda that wraps CALL-NEXT-METHOD in ENSURE-CLASS-USING-CLASS, so that we
@@ -98,7 +98,7 @@ just funcalls %ECUC-METHOD appropriately."))
   (assert (or (symbolp metaclass) (c2mop:classp metaclass)))
   (let ((metaclass (if (symbolp metaclass) (find-class metaclass) metaclass))
         (%ecuc-method
-          (lambda (class name &rest internal-args &key metaclass &allow-other-keys)
+          (lambda (class name &rest internal-args &key &allow-other-keys)
             (apply #'call-next-method
                    class
                    name
@@ -106,7 +106,7 @@ just funcalls %ECUC-METHOD appropriately."))
                    ;; And, so we'll capture implementation-specific extras:
                    (append (remove-property :%ecuc-method internal-args)
                            args)))))
-    (apply #'c2mop:ensure-class-using-metaclass metaclass class name :%ecuc-method %ecuc-method args)))
+    (apply #'c2mop:ensure-class-using-metaclass (c2mop:class-prototype metaclass) class name :%ecuc-method %ecuc-method args)))
 
 (defmethod c2mop:ensure-class-using-metaclass
     (metaclass class name
@@ -114,7 +114,6 @@ just funcalls %ECUC-METHOD appropriately."))
   (apply %ecuc-method
          class
          name
-         :metaclass metaclass
          args))
 
 ;;;; 3. Miscellaneous utils

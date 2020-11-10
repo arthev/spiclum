@@ -134,7 +134,7 @@ Thus, zero references to the object."
     updated-class))
 
 (defmethod c2mop:ensure-class-using-metaclass
-    ((metaclass prevalence-class) class name &rest args &key)
+    ((metaclass prevalence-class) (class standard-class) name &rest args &key)
   (with-recursive-locks (all-prevalence-slot-locks-for class)
     (let* ((instances (find-all class))
            (slotds->values-maps (let ((ht (make-hash-table :test #'eq)))
@@ -150,7 +150,7 @@ Thus, zero references to the object."
            (:do (with-ignored-prevalence (call-next-method))
             :undo (with-ignored-prevalence
                     ;; Might need some special-handling of %ECUC-METHOD
-                    (apply #'call-next-method (last-class-definition metaclass class name))
+                    (apply #'call-next-method (last-class-definition class name))
                     (dolist (instance instances)
                       (update-instance-for-slotds->values-map
                        instance (gethash instance slotds->values-maps)))))
