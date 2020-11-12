@@ -31,9 +31,10 @@
                                   c2mop:standard-effective-slot-definition)
   ())
 
-(defmethod initialize-instance :before ((slot keyable-slot) &key key &allow-other-keys)
+(defmethod initialize-instance :before ((slot keyable-slot) &key key allocation &allow-other-keys)
   "Sanity checks KEY."
-  (check-type key keyable-slot-key))
+  (check-type key keyable-slot-key)
+  (assert (not (and (eq :class allocation) key))))
 
 ;;;; 1. Convenience access
 
