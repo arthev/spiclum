@@ -88,10 +88,10 @@
 
 ;;;; 2. Prevalencing actions specializing on prevalence-class
 
-(defmethod (setf c2mop:slot-value-using-class) (new-value
-                                                (class prevalence-class)
-                                                instance
-                                                slotd)
+(defmethod (setf c2mop:slot-value-using-class) :around (new-value
+                                                        (class prevalence-class)
+                                                        instance
+                                                        slotd)
   "SETFs the NEW-VALUE of INSTANCE for SLOTD, as a transaction.
 
 Must atomatically update indexes and persist as appropriate."
