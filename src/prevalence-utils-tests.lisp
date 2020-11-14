@@ -404,4 +404,8 @@
       (5am:is (null (key
                      (car
                       (c2mop:class-direct-slots
-                       (find-class 'class-definition-test-class)))))))))
+                       (find-class 'class-definition-test-class))))))
+      (5am:is (= 2
+                 (length
+                  (find-all
+                   (find-class 'class-definition-test-class))))))))

@@ -152,7 +152,7 @@ Thus, zero references to the object."
                     (apply #'call-next-method (last-class-definition class name %ecuc-method))
                     (dolist (instance instances)
                       (update-instance-for-slotds->values-map
-                       instance (gethash instance slotds->values-maps)))))
+                       instance (gethash instance slotds->values-maps) :by-name t))))
            (:do (prevalence-insert-instances instances)
             :undo (prevalence-remove-instances instances)))
         (apply #'register-last-class-definition metaclass class name args)
