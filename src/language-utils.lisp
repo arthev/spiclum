@@ -91,37 +91,39 @@ Probably assumes no metaclasses have metaclasses."
 ;; Let's hack the desired symbol for now
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (intern "ENSURE-CLASS-USING-METACLASS" 'c2mop)
-  (export (find-symbol "ENSURE-CLASS-USING-METACLASS" 'c2mop) 'c2mop))
+  (export (find-symbol "ENSURE-CLASS-USING-METACLASS" 'c2mop) 'c2mop)
+  (intern "*%ECUC-METHOD*" 'c2mop)
+  (export (find-symbol "*%ECUC-METHOD*" 'c2mop) 'c2mop))
+
+(defvar c2mop:*%ecuc-method* nil
+  "This holds the next ensure-class-using-class method for use with the
+ensure-class-using-metaclass modification of the MOP. Internal implementation detail.")
 
 (defgeneric c2mop:ensure-class-using-metaclass
     (metaclass class name
-     &key %ecuc-method &allow-other-keys)
+     &key &allow-other-keys)
   (:documentation "Extend the MOP since ENSURE-CLASS-USING-CLASS doesn't allow specializing on the metaclass.
 
-%ECUC-METHOD should be a lambda that wraps CALL-NEXT-METHOD in ENSURE-CLASS-USING-CLASS, so that we
-can leave the 'main body of work' in the same place as before. This is an implementation hack.
-See the :around method on ENSURE-CLASS-USING-CLASS. The base method for ENSURE-CLASS-USING-METACLASS
-just funcalls %ECUC-METHOD appropriately."))
+METACLASS is a prototype of the metaclass."))
 
 (defmethod c2mop:ensure-class-using-class :around
     (class name &rest args &key (metaclass 'standard-class) &allow-other-keys)
   (assert (or (symbolp metaclass) (c2mop:classp metaclass)))
   (let ((metaclass (if (symbolp metaclass) (find-class metaclass) metaclass))
-        (%ecuc-method
+        (c2mop:*%ecuc-method*
           (lambda (class name &rest internal-args &key &allow-other-keys)
             (apply #'call-next-method
                    class
                    name
                    :metaclass metaclass
                    ;; And, so we'll capture implementation-specific extras:
-                   (append (remove-property :%ecuc-method internal-args)
-                           args)))))
-    (apply #'c2mop:ensure-class-using-metaclass (c2mop:class-prototype metaclass) class name :%ecuc-method %ecuc-method args)))
+                   (append internal-args args)))))
+    (apply #'c2mop:ensure-class-using-metaclass (c2mop:class-prototype metaclass) class name args)))
 
 (defmethod c2mop:ensure-class-using-metaclass
     (metaclass class name
-     &rest args &key %ecuc-method &allow-other-keys)
-  (apply %ecuc-method
+     &rest args &key &allow-other-keys)
+  (apply c2mop:*%ecuc-method*
          class
          name
          args))

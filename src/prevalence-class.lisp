@@ -144,7 +144,7 @@ Thus, zero references to the object."
     updated-class))
 
 (defmethod c2mop:ensure-class-using-metaclass
-    ((metaclass prevalence-class) (class standard-class) name &rest args &key %ecuc-method &allow-other-keys)
+    ((metaclass prevalence-class) (class standard-class) name &rest args &key &allow-other-keys)
   (with-recursive-locks (all-prevalence-slot-locks-for class)
     (let* ((instances (find-all class))
            (slotds->values-maps (let ((ht (make-hash-table :test #'eq)))
@@ -159,7 +159,7 @@ Thus, zero references to the object."
            ;; CLASS (being non-nil) should be the return value of CALL-NEXT-METHOD
            (:do (with-ignored-prevalence (call-next-method))
             :undo (with-ignored-prevalence
-                    (apply #'call-next-method (last-class-definition class name %ecuc-method))
+                    (apply #'call-next-method (last-class-definition class name))
                     (dolist (instance instances)
                       (update-instance-for-slotds->values-map
                        instance (gethash instance slotds->values-maps) :by-name t))))
