@@ -88,6 +88,16 @@
 
 ;;;; 2. Prevalencing actions specializing on prevalence-class
 
+(defmethod c2mop:slot-makunbound-using-class ((class prevalence-class)
+                                              object
+                                              slotd)
+  (multiple-value-bind (old-value slot-boundp)
+      (guarded-slot-value object (c2mop:slot-definition-name slotd))
+    (let ((result (call-next-method)))
+      (when slot-boundp
+        (prevalence-remove-class-slot class slotd old-value object))
+      result)))
+
 (defmethod (setf c2mop:slot-value-using-class) :around (new-value
                                                         (class prevalence-class)
                                                         instance

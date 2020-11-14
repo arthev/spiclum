@@ -455,3 +455,11 @@
               ((a :initarg :a :key :precedence-unique :equality #'equalp))))
       (check-lookup-finds-object i1)
       (check-lookup-finds-object i2))))
+
+(5am:test :slot-makunbound-using-class-updates-lookups
+  (with-fixture-system (sb _)
+    (let ((slotd (slot-by-name (class-of sb) 'pu-left))
+          (value (pu-left sb)))
+      (5am:is-true (check-lookup-finds-object-slotd-value-p sb slotd value))
+      (slot-makunbound sb 'pu-left)
+      (5am:is-false (check-lookup-finds-object-slotd-value-p sb slotd value)))))
