@@ -56,37 +56,12 @@
 ;; Might be rather odd behaviour, particularly if we have different metaclasses
 ;; on the mixins. For simplicity, designing as if disallowed.
 
-;;;; 1. Acceptable slot values
+;;;; 1. Prevalencing actions specializing on prevalence-class
 
 (defun acceptable-persistent-slot-value-type-p (new-value)
-  (%acceptable-persistent-slot-value-type-p (metaclass-of new-value) new-value))
-
-(defgeneric %acceptable-persistent-slot-value-type-p (metaclass new-value)
-  (:documentation "Predicate to determine whether NEW-VALUE can be stored
-   as a persistent slot value. Exported for further user specification.
-   Of course, if something can be stored, it must be (de)serializable as well."))
-
-(defmethod %acceptable-persistent-slot-value-type-p
-    ((metaclass (eql (find-class 'standard-class))) new-value)
-  (error "Can't use ~S as slot-value for persistent object,~%~
-          since it's metaclass ~S"
-         new-value metaclass))
-
-(defmethod %acceptable-persistent-slot-value-type-p
-    ((metaclass (eql (find-class 'structure-class))) new-value)
-  (error "Can't use ~S as slot-value for persistent object,~%~
-          since it's metaclass ~S"
-         new-value metaclass))
-
-(defmethod %acceptable-persistent-slot-value-type-p
-    ((metaclass (eql (find-class 'built-in-class))) new-value)
-  t)
-
-(defmethod %acceptable-persistent-slot-value-type-p
-    ((metaclass (eql (find-class 'prevalence-class))) new-value)
-  t)
-
-;;;; 2. Prevalencing actions specializing on prevalence-class
+  (c2mop:compute-applicable-methods-using-classes
+   #'serialize-object
+   (list (class-of new-value))))
 
 (defmethod c2mop:slot-makunbound-using-class ((class prevalence-class)
                                               object
