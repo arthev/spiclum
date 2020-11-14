@@ -409,3 +409,49 @@
                  (length
                   (find-all
                    (find-class 'class-definition-test-class))))))))
+
+(5am:test :class-redefinition-works-with-inheritance
+  (let ((*prevalence-system* (make-instance 'prevalence-system)))
+    (ignore-errors (setf (find-class 'a-class) nil))
+    (ignore-errors (setf (find-class 'b-class) nil))
+    (eval '(defpclass a-class ()
+            ((a :initarg :a :key :index :equality #'equalp))))
+    (eval '(defpclass b-class (a-class)
+            ((b :initarg :b :key :precedence-unique :equality #'equalp))))
+    (let ((original-a-definition (gethash 'a-class (class-definition-store *prevalence-system*)))
+          (i1 (make-instance 'b-class :a 5 :b 2))
+          (i2 (make-instance 'b-class :a 5 :b 8)))
+      (check-lookup-finds-object i1)
+      (check-lookup-finds-object i2)
+      (5am:is (= 2
+                 (length
+                  (find-all
+                   (find-class 'a-class)))))
+      (5am:is (= 2
+                 (length
+                  (find-all
+                   (find-class 'b-class)))))
+      (handler-case
+          (progn
+            (eval '(defpclass a-class ()
+                    ((a :initarg :a :key :precedence-unique :equality #'equalp))))
+            (5am:fail "Expected non-unique-unique keys error, but no error happened."))
+        (non-unique-unique-keys ()
+          (5am:pass "class redefinition resulted in expected error.")))
+      (5am:is (eq original-a-definition
+                  (gethash 'a-class (class-definition-store *prevalence-system*))))
+      (5am:is (= 2
+                 (length
+                  (find-all
+                   (find-class 'a-class)))))
+      (5am:is (= 2
+                 (length
+                  (find-all
+                   (find-class 'b-class)))))
+      (check-lookup-finds-object i1)
+      (check-lookup-finds-object i2)
+      (setf (slot-value i1 'a) 12)
+      (eval '(defpclass a-class ()
+              ((a :initarg :a :key :precedence-unique :equality #'equalp))))
+      (check-lookup-finds-object i1)
+      (check-lookup-finds-object i2))))
