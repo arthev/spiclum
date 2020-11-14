@@ -381,22 +381,27 @@
     (eval '(defpclass class-definition-test-class ()
             ((a :initarg :a))))
     (5am:is (plusp (hash-table-count (class-definition-store *prevalence-system*))))
-    (check-lookup-finds-object (make-instance 'class-definition-test-class :a 5))
-    (check-lookup-finds-object (make-instance 'class-definition-test-class :a 5))
-    (5am:is (= 2
-               (length
-                (find-all
-                 (find-class 'class-definition-test-class)))))
-    (handler-case
-        (progn
-          (eval '(defpclass class-definition-test-class ()
-                  ((a :initarg :a
-                      :key :precedence-unique
-                      :equality #'eql))))
-          (5am:fail "Expected non-unique-unique keys error, but no error happened."))
-      (non-unique-unique-keys ()
-        (5am:pass "class redefinition resulted in expected error.")))
-    (5am:is (null (key
-                   (car
-                    (c2mop:class-direct-slots
-                     (find-class 'class-definition-test-class))))))))
+    (let ((i1 (make-instance 'class-definition-test-class :a 5))
+          (i2 (make-instance 'class-definition-test-class :a 5))
+          (the-class (find-class 'class-definition-test-class)))
+      (check-lookup-finds-object i1)
+      (check-lookup-finds-object i2)
+      (5am:is (= 2
+                 (length
+                  (find-all
+                   (find-class 'class-definition-test-class)))))
+      (handler-case
+          (progn
+            (eval '(defpclass class-definition-test-class ()
+                    ((a :initarg :a
+                        :key :precedence-unique
+                        :equality #'eql))))
+            (5am:fail "Expected non-unique-unique keys error, but no error happened."))
+        (non-unique-unique-keys ()
+          (5am:pass "class redefinition resulted in expected error.")))
+      (5am:is (eq the-class
+                  (find-class 'class-definition-test-class)))
+      (5am:is (null (key
+                     (car
+                      (c2mop:class-direct-slots
+                       (find-class 'class-definition-test-class)))))))))

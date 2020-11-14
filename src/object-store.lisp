@@ -42,17 +42,17 @@
   (setf (gethash name (class-definition-store *prevalence-system*))
         (list* metaclass class name args)))
 
-(defun last-class-definition (supplied-class supplied-name)
+(defun last-class-definition (supplied-class supplied-name supplied-%ecuc-method)
   "Returns the previous class definition supplied to ensure-class-using-metaclass.
 
 Returns SUPPLIED-CLASS in place of the CLASS argument registered during the previous
 call, since CLASS might have been NIL during the previous call - and we'd get wrong
 behaviour if we supplied NIL once the class has been defined. If CLASS isn't NIL,
-then SUPPLIED-CLASS and CLASS should be EQ."
+then SUPPLIED-CLASS and CLASS should be EQ. The same casing is why we have to handle %ecuc-method too."
   (destructuring-bind (metaclass class name &rest args)
       (gethash supplied-name (class-definition-store *prevalence-system*))
     (declare (ignore class))
-    (list* metaclass supplied-class name args)))
+    (list* metaclass supplied-class name :%ecuc-method supplied-%ecuc-method args)))
 
 ;;;; 2. Instance Lookup
 
