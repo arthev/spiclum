@@ -107,9 +107,6 @@
 
 ;;;; Helpers
 
-(defun slot-by-name (class name)
-  (find name (c2mop:class-slots class) :key #'c2mop:slot-definition-name))
-
 (defun check-lookup-finds-object-slotd-value-p (obj slotd value)
   (let ((using-class
           (ccase (key slotd)

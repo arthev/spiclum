@@ -35,6 +35,9 @@ Probably assumes no metaclasses have metaclasses."
       (values (class-of obj) t)
       (values (class-of (class-of obj)) nil)))
 
+(defun slot-by-name (class name)
+  (find name (c2mop:class-slots class) :key #'c2mop:slot-definition-name))
+
 (defun slotds->values-map (instance)
   "Creates a map from INSTANCE's slotds to their values. Unbound slots aren't keyed."
   (let ((hash-table (make-hash-table)))

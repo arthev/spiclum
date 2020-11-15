@@ -15,3 +15,7 @@
                      (eq instance-class class)
                      (c2mop:subclassp instance-class class))
               collect instance))))
+
+(defun find-by-uuid (uuid)
+  (let ((class (find-class 'prevalence-object)))
+    (prevalence-lookup-class-slot class (slot-by-name class 'uuid) uuid)))
