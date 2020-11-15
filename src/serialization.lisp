@@ -25,6 +25,42 @@
                      %forced-p t)
                value))))
 
+(defun instance->make-instance-form (instance)
+  ;; Complications since not all slots have initargs,
+  ;; and generally supplying a value as an initarg
+  ;; doesn't mean that becomes the value of the associated slot.
+  (let* ((class
+           (class-of instance))
+         (slot-map
+           (mapappend
+            (lambda (slotd)
+              (let ((slot-name (c2mop:slot-definition-name slotd)))
+                (when (slot-boundp instance slot-name)
+                  `((,slot-name
+                     :value ,(serialize-object (slot-value instance slot-name))
+                     :initarg ,(car (c2mop:slot-definition-initargs slotd)))))))
+            (c2mop:class-slots class)))
+         (initargs
+           (mapappend
+            (lambda (map)
+              (destructuring-bind (name &key value initarg) map
+                (declare (ignore name))
+                (when initarg
+                  `(,initarg ,value))))
+            slot-map))
+         (setf-forms
+           (mapcar
+            (lambda (map)
+              (destructuring-bind (name &key value initarg) map
+                (declare (ignore initarg))
+                `(setf (slot-value reloaded-instance ',name) ,value)))
+            slot-map)))
+    `(let ((reloaded-instance
+             (make-instance ',(class-name class)
+                            ,@initargs)))
+       ,@setf-forms
+       reloaded-instance)))
+
 ;;;; 1. Serialization
 
 ;;;; Chapter 2 of CLTL2 should be highly relevant...
@@ -72,9 +108,8 @@ acceptable-persistent-slot-value-type-p."))
 (defmethod serialize-object ((thunk thunk))
   (serialize-object (force thunk)))
 
-(defmethod serialize-object ((class prevalence-object))
-  ;; TODO: Implement
+(defmethod serialize-object ((instance prevalence-object))
   (if *prevalence->lookup-serialization-p*
-      `(thunk (find-by-uuid ,(uuid class)))
+      `(thunk (find-by-uuid ,(uuid instance)))
       (let ((*prevalence->lookup-serialization-p*))
-        'build-a-make-instance)))
+        (instance->make-instance-form instance))))
