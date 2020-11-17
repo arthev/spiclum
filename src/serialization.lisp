@@ -1,5 +1,14 @@
 (in-package :spiclum)
 
+(defparameter *persisting-p* t
+  "Toggle for whether to persist data or not.")
+
+(defparameter *prevalence->lookup-serialization-p* nil
+  "Whether to serialize prevalence-objects as lookups by uuid or not.")
+
+(defparameter *saving-world-p* nil
+  "Whether we're in the process of saving the world.")
+
 ;;;; 0. Utilities
 
 ;;; Some lazy ones to handle lookups when recreating the world
@@ -24,6 +33,8 @@
         (progn (setf value (force (funcall value))
                      %forced-p t)
                value))))
+
+;;; Miscellaneous
 
 (defun instance->make-instance-form (instance)
   ;; Complications since not all slots have initargs,
@@ -61,17 +72,25 @@
        ,@setf-forms
        reloaded-instance)))
 
+(defmacro hashify ((&key test size rehash-size rehash-threshold) &body pairs)
+  (assert (evenp (length pairs)))
+  (let ((ht (gensym)))
+    `(let ((,ht (make-hash-table :test ,test
+                                 :size ,size
+                                 :rehash-size ,rehash-size
+                                 :rehash-threshold ,rehash-threshold)))
+       ,@(loop for (key value) on pairs by #'cddr
+       collect `(setf (gethash ,key ,ht) ,value))
+       ,ht)))
+
+(defun arrayify (array-args &rest elts)
+  (let ((array (apply #'make-array array-args)))
+    (loop for i from 0
+          for elt in elts
+          do (setf (row-major-aref array i) elt))
+    array))
+
 ;;;; 1. Serialization
-
-;;;; Chapter 2 of CLTL2 should be highly relevant...
-;;;; It lists common lisp data types, after all!
-;;;; Also: http://www.lispworks.com/documentation/lw50/CLHS/Body/04_bb.htm
-;;;; http://www.lispworks.com/documentation/lw50/CLHS/Body/04_bc.htm
-
-(defparameter *persisting-p* t
-  "Toggle for whether to persist data or not.")
-
-(defparameter *prevalence->lookup-serialization-p* nil)
 
 (defgeneric serialize-object (object)
   (:documentation "Generic to serialize arbitrary objects.
@@ -84,8 +103,21 @@ the value must be serializable as per this generic having an
 applicable method for that value. See
 acceptable-persistent-slot-value-type-p."))
 
-(defmethod serialize-object (object)
-  :undef)
+;;;; TODO:
+;;;; Pathnames???? No idea
+
+;;;; conditions - http://www.lispworks.com/documentation/lw50/CLHS/Body/e_cnd.htm
+;;;;              makes it seem like traversing arbitrary slots etc. might be quite hard
+
+;;;; structures are decently complicated due to non-standard readers/writers
+;;;;    Structs have terrible introspection. But by default they have a readable printable representation.
+;;;;      maybe we can hack that by: copy a struct, iterate its slots (not portable!), populate the new struct
+;;;;      with the serialize-object calls, and then use _that_ as the serialization.
+;;;;    Alternatively, maybe def-ser-struct which just adds inheritance of a struct with slots specifically
+;;;;      to carry the introspection information. Oh, but wait, structs only allow single inheritance what fucking junk.
+;;;;    Alright, we can add a def-serializable-struct that parses the def-struct form similarly to defstruct, and
+;;;;      then we can use THAT information to build a defmethod that yields the information we need to serializable the
+;;;;      fucking stuff.
 
 (defmethod serialize-object ((number number))
   number)
@@ -93,13 +125,55 @@ acceptable-persistent-slot-value-type-p."))
 (defmethod serialize-object ((symbol symbol))
   `',symbol)
 
+(defmethod serialize-object ((character character))
+  ;; TODO?: Use the printer-escaping behaviour as per
+  ;; lispworks.com/documentation/lw50/CLHS/Body/22_acb.htm
+  character)
+
 (defmethod serialize-object ((string string))
-  ;; TODO: Handle both simple and non-simple strings appropriately
-  string)
+  (if (simple-string-p string)
+      string
+      (call-next-method)))
+
+(defmethod serialize-object ((state random-state))
+  ;; http://www.lispworks.com/documentation/lw50/CLHS/Body/t_rnd_st.htm
+  ;; requires random-states to have a readable printable representation.
+  state)
 
 (defmethod serialize-object ((list list))
+  ;: TODO: Handle circularity
+  ;; See the following link for discussion on different list types that need special handling:
+  ;; https://stackoverflow.com/questions/60247877/check-for-proper-list-in-common-lisp
   (let ((*prevalence->lookup-serialization-p* t))
-    (cons 'list (mapcar #'serialize-object list))))
+    (if (null list)
+        nil
+        `(cons ,(serialize-object (car list))
+               ,(serialize-object (cdr list))))))
+
+(defmethod serialize-object ((array array))
+  (let* ((*prevalence->lookup-serialization-p* t)
+         (fill-pointer (ignore-errors (fill-pointer array))))
+    `(arrayify
+      '(,(if fill-pointer
+             fill-pointer
+             (array-dimensions array))
+        :element-type ,(array-element-type array)
+        :adjustable ,(adjustable-array-p array)
+        :fill-pointer ,fill-pointer)
+      ,@(loop for i from 0 below (if fill-pointer
+                                     fill-pointer
+                                     (reduce #'* (array-dimensions array)))
+              collect (serialize-object (row-major-aref array i))))))
+
+(defmethod serialize-object ((ht hash-table))
+  (let ((*prevalence->lookup-serialization-p* t))
+    `(hashify (:test ,(list 'function (hash-table-test ht))
+                :size ,(hash-table-size ht)
+                :rehash-size ,(hash-table-rehash-size ht)
+                :rehash-threshold ,(hash-table-rehash-threshold ht))
+       ,@(loop for key being the hash-keys of ht
+               collect (serialize-object key)
+               collect (serialize-object (gethash key ht))))))
 
 (defmethod serialize-object ((class standard-class))
   (assert (class-name class))
@@ -110,6 +184,8 @@ acceptable-persistent-slot-value-type-p."))
 
 (defmethod serialize-object ((instance prevalence-object))
   (if *prevalence->lookup-serialization-p*
-      `(thunk (find-by-uuid ,(uuid instance)))
+      (if *saving-world-p*
+          `(thunk (find-by-uuid ,(uuid instance)))
+          `(find-by-uuid ,(uuid instance)))
       (let ((*prevalence->lookup-serialization-p*))
         (instance->make-instance-form instance))))
