@@ -71,6 +71,7 @@
     (let ((result (call-next-method)))
       (when slot-boundp
         (prevalence-remove-class-slot class slotd old-value object))
+      (serialize-slot-makunbound-using-class class object slotd)
       result)))
 
 (defmethod (setf c2mop:slot-value-using-class) :around (new-value

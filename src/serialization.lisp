@@ -198,6 +198,14 @@ acceptable-persistent-slot-value-type-p."))
 
 ;;;; 2. MOPy Action Serialization
 
+(defun serialize-slot-makunbound-using-class (class object slotd)
+  (let ((*prevalence->lookup-serialization-p* t))
+    (serialize-write
+     `(c2mop:slot-makunbound-using-class ,(serialize-object class)
+                                         ,(serialize-object object)
+                                         (slot-by-name ,(serialize-object class)
+                                                       ',(c2mop:slot-definition-name slotd))))))
+
 (defun serialize-setf-slot-value-using-class (new-value class instance slotd)
   (let ((*prevalence->lookup-serialization-p* t))
     (serialize-write
