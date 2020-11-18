@@ -95,6 +95,7 @@ Must atomatically update indexes and persist as appropriate."
                         (slot-makunbound instance (c2mop:slot-definition-name slotd))))
              (:do (prevalence-insert-class-slot class slotd new-value instance)
               :undo (prevalence-remove-class-slot class slotd new-value instance)))
+          (serialize-setf-slot-value-using-class new-value class instance slotd)
           (values-list results))))))
 
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)

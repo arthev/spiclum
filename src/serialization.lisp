@@ -198,21 +198,32 @@ acceptable-persistent-slot-value-type-p."))
 
 ;;;; 2. MOPy Action Serialization
 
+(defun serialize-setf-slot-value-using-class (new-value class instance slotd)
+  (let ((*prevalence->lookup-serialization-p* t))
+    (serialize-write
+     `(setf (c2mop:slot-value-using-class ,(serialize-object class)
+                                          ,(serialize-object instance)
+                                          (slot-by-name ,(serialize-object class)
+                                                        ',(c2mop:slot-definition-name slotd)))
+            ,(serialize-object new-value)))))
+
 (defun serialize-make-instance (instance initargs)
-  (multiple-value-bind (serialization-form serialized-initargs)
-      (instance->make-instance-form instance)
-    ;; TODO: Throw a specific serialization error instead?
-    (assert (subsetp (plist-keys initargs)
-                     (plist-keys serialized-initargs)))
-    (serialize-write serialization-form)))
+  (let ((*prevalence->lookup-serialization-p* t))
+    (multiple-value-bind (serialization-form serialized-initargs)
+        (instance->make-instance-form instance)
+      ;; TODO: Throw a specific serialization error instead?
+      (assert (subsetp (plist-keys initargs)
+                       (plist-keys serialized-initargs)))
+      (serialize-write serialization-form))))
 
 (defun serialize-ensure-class-using-metaclass (class name args)
   ;; Yeah I realize this looks a bit weird, but until we change the MOP...
-  (serialize-write
-   `(c2mop:ensure-class-using-class ,(serialize-object class)
-                                    ,(serialize-object name)
-                                    ,@(mapcar #'serialize-object args))))
+  (let ((*prevalence->lookup-serialization-p* t))
+    (serialize-write
+     `(c2mop:ensure-class-using-class ,(serialize-object class)
+                                      ,(serialize-object name)
+                                      ,@(mapcar #'serialize-object args)))))
 ;;;; 3. IO
 
 (defun serialize-write (form)
-  (format t "~S" form))
+  (format t "~S~%" form))
