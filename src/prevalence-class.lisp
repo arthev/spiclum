@@ -108,6 +108,9 @@ Thus, zero references to the object."
       (as-transaction
           ((:do (prevalence-insert-instance instance)
             :undo (prevalence-remove-instance instance)))
+        ;; TODO: Think a bit about when to serialize etc. in case of errors
+        ;; to keep transactive nature. Or wrap &BODY in (error-handler...)?
+        (serialize-make-instance instance initargs)
         instance))))
 
 (defvar *instances-affected-by-redefinition* nil)
@@ -116,6 +119,7 @@ Thus, zero references to the object."
     ((metaclass prevalence-class) (class null) name &rest args &key)
   (let ((updated-class (call-next-method)))
     (apply #'register-last-class-definition metaclass class name args)
+    (serialize-ensure-class-using-metaclass class name args)
     updated-class))
 
 (defmethod c2mop:ensure-class-using-metaclass
@@ -140,6 +144,7 @@ Thus, zero references to the object."
                        instance (gethash instance slotds->values-maps) :by-name t))))
            (:do (prevalence-insert-instances instances)
             :undo (prevalence-remove-instances instances)))
+        (serialize-ensure-class-using-metaclass class name args)
         (apply #'register-last-class-definition metaclass class name args)
         class))))
 

@@ -36,6 +36,7 @@
 
 ;;; Miscellaneous
 
+;; TODO introduce macro like hashify
 (defun instance->make-instance-form (instance)
   ;; Complications since not all slots have initargs,
   ;; and generally supplying a value as an initarg
@@ -66,13 +67,16 @@
                 (declare (ignore initarg))
                 `(setf (slot-value reloaded-instance ',name) ,value)))
             slot-map)))
-    `(let ((reloaded-instance
-             (make-instance ',(class-name class)
-                            ,@initargs)))
-       ,@setf-forms
-       reloaded-instance)))
+    (values
+     `(let ((reloaded-instance
+              (make-instance ',(class-name class)
+                             ,@initargs)))
+        ,@setf-forms
+        reloaded-instance)
+     initargs)))
 
 (defmacro hashify ((&key test size rehash-size rehash-threshold) &body pairs)
+  ;; TODO: Can probably be a function
   (assert (evenp (length pairs)))
   (let ((ht (gensym)))
     `(let ((,ht (make-hash-table :test ,test
@@ -90,7 +94,7 @@
           do (setf (row-major-aref array i) elt))
     array))
 
-;;;; 1. Serialization
+;;;; 1. Data Serialization
 
 (defgeneric serialize-object (object)
   (:documentation "Generic to serialize arbitrary objects.
@@ -123,7 +127,9 @@ acceptable-persistent-slot-value-type-p."))
   number)
 
 (defmethod serialize-object ((symbol symbol))
-  `',symbol)
+  (if (keywordp symbol)
+      symbol
+      `',symbol))
 
 (defmethod serialize-object ((character character))
   ;; TODO?: Use the printer-escaping behaviour as per
@@ -145,10 +151,10 @@ acceptable-persistent-slot-value-type-p."))
   ;; See the following link for discussion on different list types that need special handling:
   ;; https://stackoverflow.com/questions/60247877/check-for-proper-list-in-common-lisp
   (let ((*prevalence->lookup-serialization-p* t))
-    (if (null list)
-        nil
-        `(cons ,(serialize-object (car list))
-               ,(serialize-object (cdr list))))))
+    (cond ((null list) nil)
+          ((null (cdr (last list))) `(list ,@(mapcar #'serialize-object list)))
+          (t `(cons ,(serialize-object (car list))
+                    ,(serialize-object (cdr list)))))))
 
 (defmethod serialize-object ((array array))
   (let* ((*prevalence->lookup-serialization-p* t)
@@ -189,3 +195,24 @@ acceptable-persistent-slot-value-type-p."))
           `(find-by-uuid ,(uuid instance)))
       (let ((*prevalence->lookup-serialization-p*))
         (instance->make-instance-form instance))))
+
+;;;; 2. MOPy Action Serialization
+
+(defun serialize-make-instance (instance initargs)
+  (multiple-value-bind (serialization-form serialized-initargs)
+      (instance->make-instance-form instance)
+    ;; TODO: Throw a specific serialization error instead?
+    (assert (subsetp (plist-keys initargs)
+                     (plist-keys serialized-initargs)))
+    (serialize-write serialization-form)))
+
+(defun serialize-ensure-class-using-metaclass (class name args)
+  ;; Yeah I realize this looks a bit weird, but until we change the MOP...
+  (serialize-write
+   `(c2mop:ensure-class-using-class ,(serialize-object class)
+                                    ,(serialize-object name)
+                                    ,@(mapcar #'serialize-object args))))
+;;;; 3. IO
+
+(defun serialize-write (form)
+  (format t "~S" form))
