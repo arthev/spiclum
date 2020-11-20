@@ -231,6 +231,19 @@ acceptable-persistent-slot-value-type-p."))
      `(c2mop:ensure-class-using-class ,(serialize-object class)
                                       ,(serialize-object name)
                                       ,@(mapcar #'serialize-object args)))))
+
+(defun serialize-change-class (instance new-class initargs)
+  (let ((*prevalence->lookup-serialization-p* t))
+    (serialize-write
+     `(change-class ,(serialize-object instance)
+                    ,(serialize-object new-class)
+                    ,@(mapcar #'serialize-object initargs)))))
+
+(defun serialize-reinitialize-instance (instance initargs)
+  (let ((*prevalence->lookup-serialization-p* t))
+    (serialize-write
+     `(reinitialize-instance ,(serialize-object instance)
+                             ,@(mapcar #'serialize-object initargs)))))
 ;;;; 3. IO
 
 (defun serialize-write (form)

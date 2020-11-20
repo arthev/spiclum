@@ -48,6 +48,7 @@
                          (prevalence-insert-instance instance :slots updated-slots)))
            (:do (prevalence-insert-instance instance :slots updated-slots)
             :undo (prevalence-remove-instance instance :slots updated-slots)))
+        (serialize-reinitialize-instance instance initargs)
         instance))))
 
 (defmethod change-class :around ((instance prevalence-object) (new-class prevalence-class)
@@ -68,4 +69,5 @@
                     (update-instance-for-slotds->values-map instance old-values)))
            (:do (prevalence-insert-instance instance)
             :undo (prevalence-remove-instance instance)))
+        (serialize-change-class instance new-class initargs)
         instance))))
