@@ -75,19 +75,18 @@
         reloaded-instance)
      initargs)))
 
-(defmacro hashify ((&key test size rehash-size rehash-threshold) &body pairs)
-  ;; TODO: Can probably be a function
+(defun hashify (hash-args &rest pairs)
   (assert (evenp (length pairs)))
-  (let ((ht (gensym)))
-    `(let ((,ht (make-hash-table :test ,test
-                                 :size ,size
-                                 :rehash-size ,rehash-size
-                                 :rehash-threshold ,rehash-threshold)))
-       ,@(loop for (key value) on pairs by #'cddr
-       collect `(setf (gethash ,key ,ht) ,value))
-       ,ht)))
+  (assert (equal '(:test :size :rehash-size :rehash-threshold)
+                 (plist-keys hash-args)))
+  (let ((ht (apply #'make-hash-table hash-args)))
+    (loop for (key value) on pairs by #'cddr
+          do (setf (gethash key ht) value))
+    ht))
 
 (defun arrayify (array-args &rest elts)
+  (assert (equal '(:element-type :adjustable :fill-pointer)
+                 (plist-keys (cdr array-args))))
   (let ((array (apply #'make-array array-args)))
     (loop for i from 0
           for elt in elts
@@ -173,10 +172,12 @@ acceptable-persistent-slot-value-type-p."))
 
 (defmethod serialize-object ((ht hash-table))
   (let ((*prevalence->lookup-serialization-p* t))
-    `(hashify (:test ,(list 'function (hash-table-test ht))
-                :size ,(hash-table-size ht)
-                :rehash-size ,(hash-table-rehash-size ht)
-                :rehash-threshold ,(hash-table-rehash-threshold ht))
+    `(hashify
+         (list
+          :test ,`(function ,(hash-table-test ht))
+          :size ,(hash-table-size ht)
+          :rehash-size ,(hash-table-rehash-size ht)
+          :rehash-threshold ,(hash-table-rehash-threshold ht))
        ,@(loop for key being the hash-keys of ht
                collect (serialize-object key)
                collect (serialize-object (gethash key ht))))))
