@@ -36,44 +36,30 @@
 
 ;;; Miscellaneous
 
-;; TODO introduce macro like hashify
 (defun instance->make-instance-form (instance)
-  ;; Complications since not all slots have initargs,
-  ;; and generally supplying a value as an initarg
-  ;; doesn't mean that becomes the value of the associated slot.
-  (let* ((class
-           (class-of instance))
-         (slot-map
-           (mapappend
-            (lambda (slotd)
-              (let ((slot-name (c2mop:slot-definition-name slotd)))
-                (when (slot-boundp instance slot-name)
-                  `((,slot-name
-                     :value ,(serialize-object (slot-value instance slot-name))
-                     :initarg ,(car (c2mop:slot-definition-initargs slotd)))))))
-            (c2mop:class-slots class)))
-         (initargs
-           (mapappend
-            (lambda (map)
-              (destructuring-bind (name &key value initarg) map
-                (declare (ignore name))
-                (when initarg
-                  `(,initarg ,value))))
-            slot-map))
-         (setf-forms
-           (mapcar
-            (lambda (map)
-              (destructuring-bind (name &key value initarg) map
-                (declare (ignore initarg))
-                `(setf (slot-value reloaded-instance ',name) ,value)))
-            slot-map)))
+  ;; Not all slots have initargs, not all initargs become slot-values
+  (let ((class (class-of instance))
+        initargs value-maps)
+    (dolist (slotd (c2mop:class-slots class))
+      (let ((slot-name (c2mop:slot-definition-name slotd)))
+        (multiple-value-bind (slot-value slot-boundp)
+            (guarded-slot-value instance slot-name)
+          (when slot-boundp
+            (prependf value-maps `(',slot-name ,slot-value))
+            (lwhen (initarg (car (c2mop:slot-definition-initargs slotd)))
+              (prependf initargs `(,initarg ,slot-value)))))))
     (values
-     `(let ((reloaded-instance
-              (make-instance ',(class-name class)
-                             ,@initargs)))
-        ,@setf-forms
-        reloaded-instance)
+     `(instancify
+       (list ',(class-name class) ,@initargs)
+       ,@value-maps)
      initargs)))
+
+(defun instancify (instance-args &rest pairs)
+  (assert (evenp (length pairs)))
+  (let ((instance (apply #'make-instance instance-args)))
+    (loop for (slot-name value) on pairs by #'cddr
+          do (setf (slot-value instance slot-name) value))
+    instance))
 
 (defun hashify (hash-args &rest pairs)
   (assert (evenp (length pairs)))
