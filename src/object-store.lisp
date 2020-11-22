@@ -23,18 +23,67 @@
     :reader lock-store)
    (lock-store-lock
     :initform (bt:make-lock "lock-store-lock")
-    :reader lock-store-lock))
+    :reader lock-store-lock)
+   (storage-path
+    :initform (error "Prevalence-system must be supplied a STORAGE-PATH")
+    :initarg :storage-path
+    :accessor storage-path)
+   (storage-timestamp
+    :initform nil
+    :initarg :storage-timestamp
+    :accessor storage-timestamp)
+   (world-file
+    :accessor world-file)
+   (log-file
+    :accessor log-file))
   (:documentation
    "HASH-STORE is a hash by persistent class with hash by slot as value."))
 
 (defparameter *prevalencing-p* t
   "Toggle for whether to update the object store")
 
-(defvar *prevalence-system* (make-instance 'prevalence-system))
+(defvar *prevalence-system*
+  (make-instance 'prevalence-system
+                 :storage-path (make-pathname :directory "home/arthur/spiclum-test"
+                                              :name "spiclum-test")))
+
+(defvar *world-filename* "spclmwrld"
+  "file ending for world files")
+
+(defvar *log-filename* "spclmlg"
+  "file ending for log files")
+
 
 (defun generate-uuid-for-object-store ()
   (bt:with-recursive-lock-held ((uuid-seed-lock *prevalence-system*))
     (incf (uuid-seed *prevalence-system*))))
+
+(defmethod initialize-instance :after ((instance prevalence-system)
+                                       &key storage-path storage-timestamp &allow-other-keys)
+  (ensure-directories-exist storage-path)
+  (flet ((pathname-for-timestamp-and-type (timestamp type)
+           (cl-fad:merge-pathnames-as-file
+            storage-path
+            (make-pathname :name (format nil "~A-~A"
+                                         (pathname-name storage-path)
+                                         timestamp)
+                           :type type))))
+    (if storage-timestamp
+        (let ((path (pathname-for-timestamp-and-type storage-timestamp *world-filename*)))
+          (unless (cl-fad:file-exists-p path)
+            (error "Can't find a file ~S as required to use STORAGE-TIMESTAMP ~s"
+                   path storage-timestamp)))
+        (let* ((worlds (remove-if (complement (lfix #'string= *world-filename*))
+                                  (cl-fad:list-directory (cl-fad:pathname-directory-pathname storage-path))
+                                  :key #'pathname-type))
+               (most-recent-world (car (sort worlds #'string-greaterp :key #'pathname-name)))
+               (storage-name (pathname-name most-recent-world)))
+          (setf (storage-timestamp instance)
+                (subseq storage-name (1+ (length (pathname-name storage-path)))))))
+    (setf (world-file instance)
+          (pathname-for-timestamp-and-type (storage-timestamp instance) *world-filename*))
+    (setf (log-file instance)
+          (pathname-for-timestamp-and-type (storage-timestamp instance) *log-filename*))))
 
 ;;;; 1. Class definition access
 

@@ -7,6 +7,7 @@
   :depends-on (:bordeaux-threads
                :fiveam
                :closer-mop
+               :cl-fad
                :cl-arthur)
   :components ((:file "src/packages")
                (:file "src/language-utils")

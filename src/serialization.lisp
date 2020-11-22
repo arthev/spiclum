@@ -1,13 +1,16 @@
 (in-package :spiclum)
 
-(defparameter *persisting-p* t
+(defvar *persisting-p* t
   "Toggle for whether to persist data or not.")
 
-(defparameter *prevalence->lookup-serialization-p* nil
+(defvar *prevalence->lookup-serialization-p* nil
   "Whether to serialize prevalence-objects as lookups by uuid or not.")
 
-(defparameter *saving-world-p* nil
+(defvar *saving-world-p* nil
   "Whether we're in the process of saving the world.")
+
+(defvar *serialization-lock* (bt:make-lock "serialization-lock")
+  "Lock to prevent multiple access to the transaction log.")
 
 ;;;; 0. Utilities
 
@@ -94,6 +97,7 @@ acceptable-persistent-slot-value-type-p."))
 
 ;;;; TODO:
 ;;;; Pathnames???? No idea
+;;;;    -- should be simple. Just serialize as `(make-pathname :name ,name etc)
 
 ;;;; conditions - http://www.lispworks.com/documentation/lw50/CLHS/Body/e_cnd.htm
 ;;;;              makes it seem like traversing arbitrary slots etc. might be quite hard
@@ -234,4 +238,11 @@ acceptable-persistent-slot-value-type-p."))
 ;;;; 3. IO
 
 (defun serialize-write (form)
-  (format t "~S~%" form))
+  (bt:with-lock-held (*serialization-lock*)
+    (with-open-file (out (if *saving-world-p*
+                             (world-file *prevalence-system*)
+                             (log-file *prevalence-system*))
+                         :direction :output
+                         :if-exists :append
+                         :if-does-not-exist :create)
+      (format out "~S~%" form))))
