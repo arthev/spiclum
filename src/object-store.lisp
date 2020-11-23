@@ -39,25 +39,6 @@
   (:documentation
    "HASH-STORE is a hash by persistent class with hash by slot as value."))
 
-(defparameter *prevalencing-p* t
-  "Toggle for whether to update the object store")
-
-(defvar *prevalence-system*
-  (make-instance 'prevalence-system
-                 :storage-path (make-pathname :directory "home/arthur/spiclum-test"
-                                              :name "spiclum-test")))
-
-(defvar *world-filename* "spclmwrld"
-  "file ending for world files")
-
-(defvar *log-filename* "spclmlg"
-  "file ending for log files")
-
-
-(defun generate-uuid-for-object-store ()
-  (bt:with-recursive-lock-held ((uuid-seed-lock *prevalence-system*))
-    (incf (uuid-seed *prevalence-system*))))
-
 (defmethod initialize-instance :after ((instance prevalence-system)
                                        &key storage-path storage-timestamp &allow-other-keys)
   (ensure-directories-exist storage-path)
@@ -76,14 +57,42 @@
         (let* ((worlds (remove-if (complement (lfix #'string= *world-filename*))
                                   (cl-fad:list-directory (cl-fad:pathname-directory-pathname storage-path))
                                   :key #'pathname-type))
-               (most-recent-world (car (sort worlds #'string-greaterp :key #'pathname-name)))
-               (storage-name (pathname-name most-recent-world)))
-          (setf (storage-timestamp instance)
-                (subseq storage-name (1+ (length (pathname-name storage-path)))))))
+               (most-recent-world (car (sort worlds #'string-greaterp :key #'pathname-name))))
+          (if most-recent-world
+              (setf (storage-timestamp instance)
+                    (subseq (pathname-name most-recent-world)
+                            (1+ (length (pathname-name storage-path)))))
+              (setf (storage-timestamp instance)
+                    (timestamp-for-new-world)))))
     (setf (world-file instance)
           (pathname-for-timestamp-and-type (storage-timestamp instance) *world-filename*))
     (setf (log-file instance)
           (pathname-for-timestamp-and-type (storage-timestamp instance) *log-filename*))))
+
+(defvar *world-filename* "spclmwrld"
+  "file ending for world files")
+
+(defvar *log-filename* "spclmlg"
+  "file ending for log files")
+
+(defparameter *prevalencing-p* t
+  "Toggle for whether to update the object store")
+
+(defvar *prevalence-system*
+  (make-instance 'prevalence-system
+                 :storage-path (make-pathname :directory "home/arthur/spiclum-test"
+                                              :name "spiclum-test")))
+
+(defun generate-uuid-for-object-store ()
+  (bt:with-recursive-lock-held ((uuid-seed-lock *prevalence-system*))
+    (incf (uuid-seed *prevalence-system*))))
+
+(defun timestamp-for-new-world ()
+  "ANSI format for date/time without fractional second part."
+  (multiple-value-bind (second minute hour date month year)
+      (get-decoded-time)
+    (format nil "~4,'0D-~2,'0D-~2,'0D ~2,'0D:~2,'0D:~2,'0D"
+            year month date hour minute second)))
 
 ;;;; 1. Class definition access
 

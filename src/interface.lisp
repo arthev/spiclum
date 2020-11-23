@@ -9,3 +9,9 @@
      ,slot-specifiers
      ,@class-options
      (:metaclass prevalence-class)))
+
+(defun save-world ()
+  'todo)
+
+(defun load-world ()
+  'todo)
