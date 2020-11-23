@@ -179,14 +179,6 @@ acceptable-persistent-slot-value-type-p."))
 (defmethod serialize-object ((thunk thunk))
   (serialize-object (force thunk)))
 
-(defmethod serialize-object ((instance prevalence-object))
-  (if *prevalence->lookup-serialization-p*
-      (if *saving-world-p*
-          `(thunk (find-by-uuid ,(uuid instance)))
-          `(find-by-uuid ,(uuid instance)))
-      (let ((*prevalence->lookup-serialization-p*))
-        (instance->make-instance-form instance))))
-
 ;;;; 2. MOPy Action Serialization
 
 (defun serialize-slot-makunbound-using-class (class object slotd)

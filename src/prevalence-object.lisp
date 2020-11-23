@@ -11,6 +11,14 @@
   (:documentation "Class for prevalent objects to inherit, to specialize on
                    reinitialize-instance etc."))
 
+(defmethod serialize-object ((instance prevalence-object))
+  (if *prevalence->lookup-serialization-p*
+      (if *saving-world-p*
+          `(thunk (find-by-uuid ,(uuid instance)))
+          `(find-by-uuid ,(uuid instance)))
+      (let ((*prevalence->lookup-serialization-p*))
+        (instance->make-instance-form instance))))
+
 ;;;; -1. Helpers
 
 (defun compute-slot-diff-against-slotds->values-map (instance map)
