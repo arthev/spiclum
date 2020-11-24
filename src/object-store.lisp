@@ -1,5 +1,39 @@
 (in-package :spiclum)
 
+;;;; -1. pathname helpers
+
+
+(defun timestamped-storage-pathname (storage-path timestamp type)
+  (cl-fad:merge-pathnames-as-file
+   storage-path
+   (make-pathname :name (format nil "~A-~A"
+                                (pathname-name storage-path)
+                                timestamp)
+                  :type type)))
+
+(defun timestamp-for-new-world ()
+  "ANSI format for date/time without fractional second part."
+  (multiple-value-bind (second minute hour date month year)
+      (get-decoded-time)
+    (format nil "~4,'0D-~2,'0D-~2,'0D ~2,'0D:~2,'0D:~2,'0D"
+            year month date hour minute second)))
+
+(defun compute-timestamp (storage-path storage-timestamp)
+  (if storage-timestamp
+      (let ((path (timestamped-storage-pathname storage-path storage-timestamp *world-filename*)))
+        (if (cl-fad:file-exists-p path)
+            storage-timestamp
+            (error "Can't find a file ~S as required to use STORAGE-TIMESTAMP ~s"
+                   path storage-timestamp)))
+      (let* ((worlds (remove-if (complement (lfix #'string= *world-filename*))
+                                (cl-fad:list-directory (cl-fad:pathname-directory-pathname storage-path))
+                                :key #'pathname-type))
+             (most-recent-world (car (sort worlds #'string-greaterp :key #'pathname-name))))
+        (if most-recent-world
+            (subseq (pathname-name most-recent-world)
+                    (1+ (length (pathname-name storage-path))))
+            (timestamp-for-new-world)))))
+
 ;;;; 0. Basic definitions
 
 ;; The "canonical" basic lookup is on the unique IDs, so those
@@ -42,37 +76,18 @@
 (defmethod initialize-instance :after ((instance prevalence-system)
                                        &key storage-path storage-timestamp &allow-other-keys)
   (ensure-directories-exist storage-path)
-  (flet ((pathname-for-timestamp-and-type (timestamp type)
-           (cl-fad:merge-pathnames-as-file
-            storage-path
-            (make-pathname :name (format nil "~A-~A"
-                                         (pathname-name storage-path)
-                                         timestamp)
-                           :type type))))
-    (if storage-timestamp
-        (let ((path (pathname-for-timestamp-and-type storage-timestamp *world-filename*)))
-          (unless (cl-fad:file-exists-p path)
-            (error "Can't find a file ~S as required to use STORAGE-TIMESTAMP ~s"
-                   path storage-timestamp)))
-        (let* ((worlds (remove-if (complement (lfix #'string= *world-filename*))
-                                  (cl-fad:list-directory (cl-fad:pathname-directory-pathname storage-path))
-                                  :key #'pathname-type))
-               (most-recent-world (car (sort worlds #'string-greaterp :key #'pathname-name))))
-          (if most-recent-world
-              (setf (storage-timestamp instance)
-                    (subseq (pathname-name most-recent-world)
-                            (1+ (length (pathname-name storage-path)))))
-              (setf (storage-timestamp instance)
-                    (timestamp-for-new-world)))))
-    (setf (world-file instance)
-          (pathname-for-timestamp-and-type (storage-timestamp instance) *world-filename*))
-    (setf (log-file instance)
-          (pathname-for-timestamp-and-type (storage-timestamp instance) *log-filename*))))
+  (let ((timestamp (compute-timestamp storage-path storage-timestamp)))
+    (setf (storage-timestamp instance)
+          timestamp
+          (world-file instance)
+          (timestamped-storage-pathname storage-path timestamp *world-filename*)
+          (log-file instance)
+          (timestamped-storage-pathname storage-path timestamp *log-filename*))))
 
-(defvar *world-filename* "spclmwrld"
+(defvar *world-filename* "world"
   "file ending for world files")
 
-(defvar *log-filename* "spclmlg"
+(defvar *log-filename* "log"
   "file ending for log files")
 
 (defparameter *prevalencing-p* t
@@ -86,13 +101,6 @@
 (defun generate-uuid-for-object-store ()
   (bt:with-recursive-lock-held ((uuid-seed-lock *prevalence-system*))
     (incf (uuid-seed *prevalence-system*))))
-
-(defun timestamp-for-new-world ()
-  "ANSI format for date/time without fractional second part."
-  (multiple-value-bind (second minute hour date month year)
-      (get-decoded-time)
-    (format nil "~4,'0D-~2,'0D-~2,'0D ~2,'0D:~2,'0D:~2,'0D"
-            year month date hour minute second)))
 
 ;;;; 1. Class definition access
 
