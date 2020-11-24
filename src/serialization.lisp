@@ -207,13 +207,48 @@ acceptable-persistent-slot-value-type-p."))
                        (plist-keys serialized-initargs)))
       (serialize-write serialization-form))))
 
+(defparameter *e-c-u-m-args-filter*
+  #+sbcl
+  '(sb-pcl::safe-p sb-pcl::source)
+  #-sbcl
+  nil)
+
+(defparameter *e-c-u-m-slots-filter*
+  #+sbcl
+  '(sb-pcl::source)
+  #-sbcl
+  nil)
+
 (defun serialize-ensure-class-using-metaclass (class name args)
   ;; Yeah I realize this looks a bit weird, but until we change the MOP...
-  (let ((*prevalence->lookup-serialization-p* t))
+  ;; Serialize as a call to e-c-u-c.
+  (let* ((*prevalence->lookup-serialization-p* t)
+         (args (remove-properties *e-c-u-m-args-filter* args))
+         (slot-args (mapcar (lfix #'remove-properties *e-c-u-m-slots-filter*)
+                            (getf args :direct-slots)))
+         (serialized-args (mapcar #'serialize-object
+                                  (remove-properties '(:direct-slots) args)))
+         (serialized-slot-args
+           `(list ,@(mapcar (lambda (slot-spec)
+                              ;; This could be a method for serializing slot properties instead
+                              (cons 'list
+                                    (loop for (key value) on slot-spec by #'cddr
+                                          if (eq :initfunction key)
+                                            collect key
+                                            and collect `(lambda ()
+                                                           ,(getf slot-spec :initform))
+                                          else
+                                            collect key
+                                            and collect (serialize-object value))))
+                            slot-args))))
     (serialize-write
-     `(c2mop:ensure-class-using-class ,(serialize-object class)
-                                      ,(serialize-object name)
-                                      ,@(mapcar #'serialize-object args)))))
+     `(c2mop:ensure-class-using-class
+       ,(serialize-object class)
+       ,(serialize-object name)
+       :direct-slots
+       ,serialized-slot-args
+       ,@serialized-args))))
+
 
 (defun serialize-change-class (instance new-class initargs)
   (let ((*prevalence->lookup-serialization-p* t))
