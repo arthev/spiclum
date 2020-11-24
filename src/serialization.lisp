@@ -48,9 +48,10 @@
         (multiple-value-bind (slot-value slot-boundp)
             (guarded-slot-value instance slot-name)
           (when slot-boundp
-            (prependf value-maps `(',slot-name ,slot-value))
-            (lwhen (initarg (car (c2mop:slot-definition-initargs slotd)))
-              (prependf initargs `(,initarg ,slot-value)))))))
+            (let ((serialized-slot-value (serialize-object slot-value)))
+              (prependf value-maps `(',slot-name ,serialized-slot-value))
+              (lwhen (initarg (car (c2mop:slot-definition-initargs slotd)))
+                (prependf initargs `(,initarg ,serialized-slot-value))))))))
     (values
      `(instancify
        (list ',(class-name class) ,@initargs)
@@ -198,7 +199,7 @@ acceptable-persistent-slot-value-type-p."))
                                                         ',(c2mop:slot-definition-name slotd)))
             ,(serialize-object new-value)))))
 
-(defun serialize-make-instance (instance initargs)
+(defun serialize-make-instance (instance &optional initargs)
   (let ((*prevalence->lookup-serialization-p* t))
     (multiple-value-bind (serialization-form serialized-initargs)
         (instance->make-instance-form instance)
@@ -265,11 +266,12 @@ acceptable-persistent-slot-value-type-p."))
 ;;;; 3. IO
 
 (defun serialize-write (form)
-  (bt:with-lock-held (*serialization-lock*)
-    (with-open-file (out (if *saving-world-p*
-                             (world-file *prevalence-system*)
-                             (log-file *prevalence-system*))
-                         :direction :output
-                         :if-exists :append
-                         :if-does-not-exist :create)
-      (format out "~S~%" form))))
+  (when *persisting-p*
+    (bt:with-lock-held (*serialization-lock*)
+      (with-open-file (out (if *saving-world-p*
+                               (world-file *prevalence-system*)
+                               (log-file *prevalence-system*))
+                           :direction :output
+                           :if-exists :append
+                           :if-does-not-exist :create)
+        (format out "~S~%" form)))))

@@ -34,6 +34,15 @@
                     (1+ (length (pathname-name storage-path))))
             (timestamp-for-new-world)))))
 
+(defun update-prevalence-system-for-timestamp (instance timestamp)
+  (with-accessors ((storage-path storage-path)) instance
+    (setf (storage-timestamp instance)
+          timestamp
+          (world-file instance)
+          (timestamped-storage-pathname storage-path timestamp *world-filename*)
+          (log-file instance)
+          (timestamped-storage-pathname storage-path timestamp *log-filename*))))
+
 ;;;; 0. Basic definitions
 
 ;; The "canonical" basic lookup is on the unique IDs, so those
@@ -77,12 +86,7 @@
                                        &key storage-path storage-timestamp &allow-other-keys)
   (ensure-directories-exist storage-path)
   (let ((timestamp (compute-timestamp storage-path storage-timestamp)))
-    (setf (storage-timestamp instance)
-          timestamp
-          (world-file instance)
-          (timestamped-storage-pathname storage-path timestamp *world-filename*)
-          (log-file instance)
-          (timestamped-storage-pathname storage-path timestamp *log-filename*))))
+    (update-prevalence-system-for-timestamp instance timestamp)))
 
 (defvar *world-filename* "world"
   "file ending for world files")

@@ -11,7 +11,11 @@
      (:metaclass prevalence-class)))
 
 (defun save-world ()
-  'todo)
+  (update-prevalence-system-for-timestamp *prevalence-system*
+                                          (timestamp-for-new-world))
+  (let ((*saving-world-p* t))
+    (dolist (object (find-all (find-class 'prevalence-object)))
+      (serialize-make-instance object))))
 
 (defun load-world ()
   'todo)
