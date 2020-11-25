@@ -221,8 +221,10 @@ acceptable-persistent-slot-value-type-p."))
   nil)
 
 (defun serialize-ensure-class-using-metaclass (class name args)
-  ;; Yeah I realize this looks a bit weird, but until we change the MOP...
-  ;; Serialize as a call to e-c-u-c.
+  (declare (ignore class))
+  ;; Serialize as a call to ensure-class since that'll correctly handle
+  ;; updates on whether class exists or not, and also delegates to
+  ;; the e-c-u-c  reliant implementation of e-c-u-m.
   (let* ((*prevalence->lookup-serialization-p* t)
          (args (remove-properties *e-c-u-m-args-filter* args))
          (slot-args (mapcar (lfix #'remove-properties *e-c-u-m-slots-filter*)
@@ -243,8 +245,7 @@ acceptable-persistent-slot-value-type-p."))
                                             and collect (serialize-object value))))
                             slot-args))))
     (serialize-write
-     `(c2mop:ensure-class-using-class
-       ,(serialize-object class)
+     `(c2mop:ensure-class
        ,(serialize-object name)
        :direct-slots
        ,serialized-slot-args
