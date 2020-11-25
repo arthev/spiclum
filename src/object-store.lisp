@@ -86,7 +86,15 @@
                                        &key storage-path storage-timestamp &allow-other-keys)
   (ensure-directories-exist storage-path)
   (let ((timestamp (compute-timestamp storage-path storage-timestamp)))
-    (update-prevalence-system-for-timestamp instance timestamp)))
+    (update-prevalence-system-for-timestamp instance timestamp))
+  (with-open-file (out (log-file instance)
+                       :direction :output
+                       :if-exists :append
+                       :if-does-not-exist :create)
+    (format out "~%;; PREVALENCE-SYSTEM targetting this ~
+                 log initialized on ~A~%"
+            (timestamp-for-new-world))))
+
 
 (defvar *world-filename* "world"
   "file ending for world files")
