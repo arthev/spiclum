@@ -18,4 +18,9 @@
       (serialize-make-instance object))))
 
 (defun load-world ()
-  'todo)
+  (let ((*package* (find-package :spiclum))
+        (*persisting-p* nil))
+    (load (world-file *prevalence-system*))
+    (load (log-file *prevalence-system*))
+    ;; Convert thunks to objs
+    ))
