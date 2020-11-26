@@ -22,5 +22,4 @@
         (*persisting-p* nil))
     (load (world-file *prevalence-system*))
     (load (log-file *prevalence-system*))
-    ;; Convert thunks to objs
-    ))
+    (force-all-thunks)))

@@ -24,6 +24,9 @@
   `(make-instance 'thunk
                   :value (lambda () ,@body)))
 
+(defun thunkp (obj)
+  (typep obj 'thunk))
+
 (defgeneric force (object))
 
 (defmethod force (object)
@@ -36,6 +39,56 @@
         (progn (setf value (force (funcall value))
                      %forced-p t)
                value))))
+
+(defmethod force-thunks (obj)
+  t)
+
+(defmethod force-thunks ((string string))
+  t)
+
+(defmethod force-thunks ((tree list))
+  ;; TODO: Handle circularity
+  (when (thunkp (car tree))
+    (setf (car tree)
+          (force (car tree))))
+  (when (thunkp (cdr tree))
+    (setf (cdr tree)
+          (force (cdr tree))))
+  (force-thunks (car tree))
+  (force-thunks (cdr tree)))
+
+(defmethod force-thunks ((array array))
+  (loop for i from 0 below (mklist (array-dimensions array))
+        for value = (row-major-aref array i)
+        do (if (thunkp value)
+              (setf (row-major-aref array i)
+                    (force value))
+              (force-thunks value))))
+
+;; TODO: Evaluate if force-thunks should return useful values for less looking before leaping etc.
+(defmethod force-thunks ((ht hash-table))
+  (dolist (key (hash-keys ht))
+    (let ((value (gethash key ht)))
+      ;; Removing entry since destructively updating key can affect hash-value
+      (remhash key ht)
+      (force-thunks key)
+      (force-thunks value)
+      (setf (gethash (force key) ht)
+            (force value)))))
+
+(defmethod force-thunks ((instance prevalence-object))
+  (dolist (slotd (c2mop:class-slots (class-of instance)))
+    (let ((slot-name (c2mop:slot-definition-name slotd)))
+      (multiple-value-bind (slot-value slot-boundp)
+          (guarded-slot-value instance slot-name)
+        (when slot-boundp
+          (if (thunkp slot-value)
+              (setf (slot-value instance slot-name)
+                    (force slot-value))
+              (force-thunks slot-value)))))))
+
+(defun force-all-thunks ()
+  (mapc #'force-thunks (find-all (find-class 'prevalence-object))))
 
 ;;; Miscellaneous
 
