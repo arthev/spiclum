@@ -114,6 +114,16 @@
   (bt:with-recursive-lock-held ((uuid-seed-lock *prevalence-system*))
     (incf (uuid-seed *prevalence-system*))))
 
+(defun reset-uuid-seed-for-object-store ()
+  (bt:with-recursive-lock-held ((uuid-seed-lock *prevalence-system*))
+    (let* ((class-table (gethash 'prevalence-object
+                                 (hash-store *prevalence-system*)))
+           (value-hash (when class-table (gethash 'uuid class-table))))
+      (when value-hash
+        (setf (uuid-seed *prevalence-system*)
+              (loop for uuid being the hash-keys of value-hash
+                    maximize uuid))))))
+
 ;;;; 1. Class definition access
 
 (defun register-last-class-definition (metaclass class name &rest args)

@@ -34,4 +34,5 @@ and the set of instances of prevalence-object.".
         (*persisting-p* nil))
     (load (world-file *prevalence-system*))
     (load (log-file *prevalence-system*))
-    (force-all-thunks)))
+    (force-all-thunks)
+    (reset-uuid-seed-for-object-store)))
