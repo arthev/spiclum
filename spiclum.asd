@@ -19,5 +19,4 @@
                (:file "src/prevalence-class")
                (:file "src/prevalence-object")
                (:file "src/interface")
-               (:file "src/prevalence-utils-tests")
-               (:file "src/main")))
+               (:file "src/prevalence-utils-tests")))

@@ -175,8 +175,6 @@ acceptable-persistent-slot-value-type-p."))
       `',symbol))
 
 (defmethod serialize-object ((character character))
-  ;; TODO?: Use the printer-escaping behaviour as per
-  ;; lispworks.com/documentation/lw50/CLHS/Body/22_acb.htm
   character)
 
 (defmethod serialize-object ((string string))
