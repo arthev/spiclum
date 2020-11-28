@@ -3,10 +3,11 @@
 ;;;; 0. :bordeaux-threads utils
 
 (defun lock-name (lock)
-  "Access the name of a lock. :bordeaux-threads doesn't support this.
-
-Implemented for: SBCL"
-  (sb-thread:mutex-name lock))
+  "Access the name of a lock. :bordeaux-threads doesn't support this."
+  #+sbcl
+  (sb-thread:mutex-name lock)
+  #-sbcl
+  (error "Not implemented"))
 
 (defmacro with-recursive-locks (locks &body body)
   "Grab LOCKS (potentially recursively) in alphabetical order, execute BODY."
