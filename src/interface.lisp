@@ -17,7 +17,7 @@
 Writes the set of class definitions for prevalence-classes,
 and the set of instances of prevalence-object."
   (update-prevalence-system-for-timestamp *prevalence-system*
-                                          (timestamp-for-new-world))
+                                          (ANSI-time))
   (let ((*saving-world-p* t))
     (maphash
      (lambda (name last-definition)

@@ -11,13 +11,6 @@
                                 timestamp)
                   :type type)))
 
-(defun timestamp-for-new-world ()
-  "ANSI format for date/time without fractional second part."
-  (multiple-value-bind (second minute hour date month year)
-      (get-decoded-time)
-    (format nil "~4,'0D-~2,'0D-~2,'0D ~2,'0D:~2,'0D:~2,'0D"
-            year month date hour minute second)))
-
 (defun compute-timestamp (storage-path storage-timestamp)
   (if storage-timestamp
       (let ((path (timestamped-storage-pathname storage-path storage-timestamp *world-filename*)))
@@ -32,7 +25,7 @@
         (if most-recent-world
             (subseq (pathname-name most-recent-world)
                     (1+ (length (pathname-name storage-path))))
-            (timestamp-for-new-world)))))
+            (ANSI-time)))))
 
 (defun update-prevalence-system-for-timestamp (instance timestamp)
   (with-accessors ((storage-path storage-path)) instance
@@ -93,7 +86,7 @@
                        :if-does-not-exist :create)
     (format out "~%;; PREVALENCE-SYSTEM targetting this ~
                  log initialized on ~A~%"
-            (timestamp-for-new-world))))
+            (ANSI-time))))
 
 
 (defvar *world-filename* "world"

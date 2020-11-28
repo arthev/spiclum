@@ -169,3 +169,12 @@ Non-local exits from BODY do not trigger rollback as above."
               ,@body)
          (unless ,success-sym
            ,@undos-in-whens)))))
+
+(defun ANSI-time (&optional (time (get-universal-time)) (tz 0))
+  "ANSI format for date/time without fractional second part.
+
+Accepts a timezone, but doesn't (yet?) reflect the timezone in the output."
+  (multiple-value-bind (second minute hour date month year)
+      (decode-universal-time time tz)
+    (format nil "~4,'0D-~2,'0D-~2,'0D ~2,'0D:~2,'0D:~2,'0D"
+            year month date hour minute second)))
