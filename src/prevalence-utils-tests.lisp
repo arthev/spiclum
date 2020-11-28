@@ -265,15 +265,15 @@
 
 (5am:test :reinitialize-instance-correctly-updates-lookups
   (with-fixture-system (sb _)
-    (flet ((slotds->values-map (obj)
+    (flet ((slot->value-map (obj)
              (mapcar (lambda (slotd)
                        (cons slotd (slot-value sb (c2mop:slot-definition-name slotd))))
                      (c2mop:class-slots (class-of obj)))))
       (let* ((*persisting-p* nil)
-             (old-values (slotds->values-map sb)))
+             (old-values (slot->value-map sb)))
         (apply #'reinitialize-instance sb (nthcdr 4 *sample-bottom-unoccupied-plist*))
         (5am:is-false (equalp old-values
-                              (slotds->values-map sb)))
+                              (slot->value-map sb)))
         (check-lookup-finds-object sb)
 
         (dolist (slotd->value old-values)

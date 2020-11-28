@@ -50,32 +50,23 @@ don't support that for SBCL."
     (c2mop:finalize-inheritance class))
   (find name (c2mop:class-slots class) :key #'c2mop:slot-definition-name))
 
-(defun slotds->values-map (instance)
-  "Creates a map from INSTANCE's slotds to their values. Unbound slots aren't keyed."
+(defun slot->value-map (instance)
+  "Hash-table of slot-names->values. Unbound slots aren't keyed."
   (let ((hash-table (make-hash-table)))
-    (do-bound-slots (slotd instance :value slot-value)
-      (setf (gethash slotd hash-table) slot-value))
+    (do-bound-slots (slotd instance :value slot-value :name slot-name)
+      (setf (gethash slot-name hash-table) slot-value))
     hash-table))
 
-(defun update-instance-for-slotds->values-map (instance map &key by-name)
+(defun update-instance-for-slot->value-map (instance map)
   "Update all of INSTANCE's slot values to match MAP."
-  ;; There are surely more effective ways to implement by-name.
-  ;; For example, by matching by-name arg with slotds->values-map.
-  ;; Then we'd only need a (gethash (if by-name (c2mop:slot-definition-name slotd) slotd) map),
-  ;; instead of this current O(n**2) algorithm. Well, correctness first...
-  (let ((old-slotds (when by-name (hash-keys map))))
-    (dolist (slotd (c2mop:class-slots (class-of instance)))
+  (assert (subsetp (hash-keys map) (slot-names instance)))
+  (dolist (slotd (c2mop:class-slots (class-of instance)))
+    (let ((slot-name (c2mop:slot-definition-name slotd)))
       (multiple-value-bind (value present-p)
-          (if by-name
-              (let ((analogue-slotd (find (c2mop:slot-definition-name slotd)
-                                         old-slotds
-                                         :key #'c2mop:slot-definition-name)))
-                (gethash analogue-slotd map))
-              (gethash slotd map))
+          (gethash slot-name map)
         (if present-p
-            (setf (slot-value instance (c2mop:slot-definition-name slotd))
-                  value)
-            (slot-makunbound instance (c2mop:slot-definition-name slotd)))))))
+            (setf (slot-value instance slot-name) value)
+            (slot-makunbound instance slot-name))))))
 
 (defun guarded-slot-value (instance slot-name)
   "Like SLOT-VALUE: doesn't error; secondary value indicates whether the slot is bound."

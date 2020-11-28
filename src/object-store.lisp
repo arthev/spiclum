@@ -247,12 +247,12 @@
 (defun prevalence-remove-instance
     (instance &key
                 (slots (c2mop:class-slots (class-of instance)))
-                (values (slotds->values-map instance)))
+                (values (slot->value-map instance)))
   (let ((class (class-of instance)))
     (dolist (slotd slots)
       (when (key slotd)
         (multiple-value-bind (value present-p)
-            (gethash slotd values)
+            (gethash (c2mop:slot-definition-name slotd) values)
           (when present-p
             (prevalence-remove-class-slot
              class slotd value instance)))))))
