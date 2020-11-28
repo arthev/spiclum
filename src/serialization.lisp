@@ -3,9 +3,6 @@
 (defvar *persisting-p* t
   "Toggle for whether to persist data or not.")
 
-(defvar *prevalence->lookup-serialization-p* nil
-  "Whether to serialize prevalence-objects as lookups by uuid or not.")
-
 (defvar *saving-world-p* nil
   "Whether we're in the process of saving the world.")
 
@@ -176,15 +173,13 @@ acceptable-persistent-slot-value-type-p."))
   ;: TODO: Handle circularity
   ;; See the following link for discussion on different list types that need special handling:
   ;; https://stackoverflow.com/questions/60247877/check-for-proper-list-in-common-lisp
-  (let ((*prevalence->lookup-serialization-p* t))
-    (cond ((null list) nil)
-          ((null (cdr (last list))) `(list ,@(mapcar #'serialize-object list)))
-          (t `(cons ,(serialize-object (car list))
-                    ,(serialize-object (cdr list)))))))
+  (cond ((null list) nil)
+        ((null (cdr (last list))) `(list ,@(mapcar #'serialize-object list)))
+        (t `(cons ,(serialize-object (car list))
+                  ,(serialize-object (cdr list))))))
 
 (defmethod serialize-object ((array array))
-  (let* ((*prevalence->lookup-serialization-p* t)
-         (fill-pointer (ignore-errors (fill-pointer array))))
+  (let ((fill-pointer (ignore-errors (fill-pointer array))))
     `(arrayify
       '(,(if fill-pointer
              fill-pointer
@@ -198,16 +193,15 @@ acceptable-persistent-slot-value-type-p."))
               collect (serialize-object (row-major-aref array i))))))
 
 (defmethod serialize-object ((ht hash-table))
-  (let ((*prevalence->lookup-serialization-p* t))
-    `(hashify
-         (list
-          :test ,`(function ,(hash-table-test ht))
-          :size ,(hash-table-size ht)
-          :rehash-size ,(hash-table-rehash-size ht)
-          :rehash-threshold ,(hash-table-rehash-threshold ht))
-       ,@(loop for key being the hash-keys of ht
-               collect (serialize-object key)
-               collect (serialize-object (gethash key ht))))))
+  `(hashify
+    (list
+     :test ,`(function ,(hash-table-test ht))
+     :size ,(hash-table-size ht)
+     :rehash-size ,(hash-table-rehash-size ht)
+     :rehash-threshold ,(hash-table-rehash-threshold ht))
+    ,@(loop for key being the hash-keys of ht
+            collect (serialize-object key)
+            collect (serialize-object (gethash key ht)))))
 
 (defmethod serialize-object ((class standard-class))
   (assert (class-name class))
@@ -219,30 +213,27 @@ acceptable-persistent-slot-value-type-p."))
 ;;;; 2. MOPy Action Serialization
 
 (defun serialize-slot-makunbound-using-class (class object slotd)
-  (let ((*prevalence->lookup-serialization-p* t))
-    (serialize-write
-     `(c2mop:slot-makunbound-using-class ,(serialize-object class)
-                                         ,(serialize-object object)
-                                         (slot-by-name ,(serialize-object class)
-                                                       ',(c2mop:slot-definition-name slotd))))))
+  (serialize-write
+   `(c2mop:slot-makunbound-using-class ,(serialize-object class)
+                                       ,(serialize-object object)
+                                       (slot-by-name ,(serialize-object class)
+                                                     ',(c2mop:slot-definition-name slotd)))))
 
 (defun serialize-setf-slot-value-using-class (new-value class instance slotd)
-  (let ((*prevalence->lookup-serialization-p* t))
-    (serialize-write
-     `(setf (c2mop:slot-value-using-class ,(serialize-object class)
-                                          ,(serialize-object instance)
-                                          (slot-by-name ,(serialize-object class)
-                                                        ',(c2mop:slot-definition-name slotd)))
-            ,(serialize-object new-value)))))
+  (serialize-write
+   `(setf (c2mop:slot-value-using-class ,(serialize-object class)
+                                        ,(serialize-object instance)
+                                        (slot-by-name ,(serialize-object class)
+                                                      ',(c2mop:slot-definition-name slotd)))
+          ,(serialize-object new-value))))
 
 (defun serialize-make-instance (instance &optional initargs)
-  (let ((*prevalence->lookup-serialization-p* t))
-    (multiple-value-bind (serialization-form serialized-initargs)
-        (instance->make-instance-form instance)
-      ;; TODO: Throw a specific serialization error instead?
-      (assert (subsetp (plist-keys initargs)
-                       (plist-keys serialized-initargs)))
-      (serialize-write serialization-form))))
+  (multiple-value-bind (serialization-form serialized-initargs)
+      (instance->make-instance-form instance)
+    ;; TODO: Throw a specific serialization error instead?
+    (assert (subsetp (plist-keys initargs)
+                     (plist-keys serialized-initargs)))
+    (serialize-write serialization-form)))
 
 (defparameter *e-c-u-m-args-filter*
   #+sbcl
@@ -261,8 +252,7 @@ acceptable-persistent-slot-value-type-p."))
   ;; Serialize as a call to ensure-class since that'll correctly handle
   ;; updates on whether class exists or not, and also delegates to
   ;; the e-c-u-c  reliant implementation of e-c-u-m.
-  (let* ((*prevalence->lookup-serialization-p* t)
-         (args (remove-properties *e-c-u-m-args-filter* args))
+  (let* ((args (remove-properties *e-c-u-m-args-filter* args))
          (slot-args (mapcar (lfix #'remove-properties *e-c-u-m-slots-filter*)
                             (getf args :direct-slots)))
          (serialized-args (mapcar #'serialize-object
@@ -289,17 +279,15 @@ acceptable-persistent-slot-value-type-p."))
 
 
 (defun serialize-change-class (instance new-class initargs)
-  (let ((*prevalence->lookup-serialization-p* t))
-    (serialize-write
-     `(change-class ,(serialize-object instance)
-                    ,(serialize-object new-class)
-                    ,@(mapcar #'serialize-object initargs)))))
+  (serialize-write
+   `(change-class ,(serialize-object instance)
+                  ,(serialize-object new-class)
+                  ,@(mapcar #'serialize-object initargs))))
 
 (defun serialize-reinitialize-instance (instance initargs)
-  (let ((*prevalence->lookup-serialization-p* t))
-    (serialize-write
-     `(reinitialize-instance ,(serialize-object instance)
-                             ,@(mapcar #'serialize-object initargs)))))
+  (serialize-write
+   `(reinitialize-instance ,(serialize-object instance)
+                           ,@(mapcar #'serialize-object initargs))))
 ;;;; 3. IO
 
 (defun serialize-write (form)

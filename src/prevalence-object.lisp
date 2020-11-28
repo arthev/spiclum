@@ -12,12 +12,9 @@
                    reinitialize-instance etc."))
 
 (defmethod serialize-object ((instance prevalence-object))
-  (if *prevalence->lookup-serialization-p*
-      (if *saving-world-p*
-          `(thunk (find-by-uuid ,(uuid instance)))
-          `(find-by-uuid ,(uuid instance)))
-      (let ((*prevalence->lookup-serialization-p*))
-        (instance->make-instance-form instance))))
+  (if *saving-world-p*
+      `(thunk (find-by-uuid ,(uuid instance)))
+      `(find-by-uuid ,(uuid instance))))
 
 (defmethod force-thunks ((instance prevalence-object))
   (do-bound-slots (slotd instance :name slot-name :value slot-value)
@@ -45,7 +42,6 @@
 ;;;; 0. Prevalencing actions specializing on prevalence-object
 
 (defmethod reinitialize-instance :around ((instance prevalence-object) &rest initargs &key &allow-other-keys)
-  (declare (ignore initargs))
   (let* ((old-values (slotds->values-map instance))
          ;; doing this here to save on computation inside the locks
          (instance (handler-bind
