@@ -124,9 +124,8 @@
                          using-class slotd value)))))
 
 (defun check-lookup-finds-object (obj)
-  (dolist (slotd (set-difference
-                  (c2mop:class-slots (class-of obj))
-                  (nil-key-slots obj)))
+  (dolist (slotd (remove-if #'null (c2mop:class-slots (class-of obj))
+                            :key #'key))
     (let* ((slot-name (c2mop:slot-definition-name slotd))
            (slot-value (slot-value obj slot-name)))
       (5am:is-true (check-lookup-finds-object-slotd-value-p obj slotd slot-value)

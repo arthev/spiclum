@@ -226,7 +226,7 @@
                       :breach-class using-class :breach-slots slotd
                       :breach-values value       :breach-object object))))
     (ccase (key slotd)
-      ((nil) nil)
+      ((nil) :do-nothing)
       (:class-unique
        (unique-removal class))
       (:precedence-unique
