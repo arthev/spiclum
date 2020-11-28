@@ -199,12 +199,12 @@ then SUPPLIED-CLASS and CLASS should be EQ."
   (let ((class (class-of instance)))
     (multiple-value-bind (available-p problem-slots problem-values)
         (prevalence-instance-slots-available-p instance :slots slots)
-      (unless available-p
-        (error 'non-unique-unique-keys :breach-class class
-                                       :breach-slots problem-slots
-                                       :breach-values problem-values)))
-    (do-bound-slots (slotd instance :slots slots :value slot-value)
-      (prevalence-insert-class-slot class slotd slot-value instance))))
+      (if available-p
+          (do-bound-slots (slotd instance :slots slots :value slot-value)
+            (prevalence-insert-class-slot class slotd slot-value instance))
+          (error 'non-unique-unique-keys :breach-class class
+                                         :breach-slots problem-slots
+                                         :breach-values problem-values)))))
 
 (defun prevalence-insert-instances (instances)
   (let (finished current)
