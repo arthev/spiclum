@@ -20,15 +20,11 @@
         (instance->make-instance-form instance))))
 
 (defmethod force-thunks ((instance prevalence-object))
-  (dolist (slotd (c2mop:class-slots (class-of instance)))
-    (let ((slot-name (c2mop:slot-definition-name slotd)))
-      (multiple-value-bind (slot-value slot-boundp)
-          (guarded-slot-value instance slot-name)
-        (when slot-boundp
-          (if (thunkp slot-value)
-              (setf (slot-value instance slot-name)
-                    (force slot-value))
-              (force-thunks slot-value)))))))
+  (do-bound-slots (slotd instance :name slot-name :value slot-value)
+    (if (thunkp slot-value)
+        (setf (slot-value instance slot-name)
+              (force slot-value))
+        (force-thunks slot-value))))
 
 ;;;; -1. Helpers
 

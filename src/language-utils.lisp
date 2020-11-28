@@ -33,11 +33,8 @@ don't support that for SBCL."
 (defun slotds->values-map (instance)
   "Creates a map from INSTANCE's slotds to their values. Unbound slots aren't keyed."
   (let ((hash-table (make-hash-table)))
-    (dolist (slotd (c2mop:class-slots (class-of instance)))
-      (let ((slot-name (c2mop:slot-definition-name slotd)))
-        (when (slot-boundp instance slot-name)
-          (setf (gethash slotd hash-table)
-                (slot-value instance slot-name)))))
+    (do-bound-slots (slotd instance :value slot-value)
+      (setf (gethash slotd hash-table) slot-value))
     hash-table))
 
 (defun update-instance-for-slotds->values-map (instance map &key by-name)
@@ -65,6 +62,23 @@ don't support that for SBCL."
   (if (slot-boundp instance slot-name)
       (values (slot-value instance slot-name) t)
       (values nil nil)))
+
+(defmacro do-bound-slots ((slot-var instance
+                           &key
+                             (slots nil slots-supplied-p)
+                             (value (gensym) value-supplied-p)
+                             (name (gensym)))
+                          &body body)
+  (let ((slots (if slots-supplied-p
+                   slots
+                   `(c2mop:class-slots (class-of ,instance)))))
+    `(dolist (,slot-var ,slots)
+       (let ((,name (c2mop:slot-definition-name ,slot-var)))
+         (when (slot-boundp ,instance ,name)
+           (let ((,value ,(if value-supplied-p
+                              `(slot-value ,instance ,name)
+                              nil)))
+             ,@body))))))
 
 (defun find-slot-defining-class (class slotd)
   "Find the most specific slot-defining-class by

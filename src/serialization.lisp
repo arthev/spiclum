@@ -85,15 +85,11 @@
   ;; Not all slots have initargs, not all initargs become slot-values
   (let ((class (class-of instance))
         initargs value-maps)
-    (dolist (slotd (c2mop:class-slots class))
-      (let ((slot-name (c2mop:slot-definition-name slotd)))
-        (multiple-value-bind (slot-value slot-boundp)
-            (guarded-slot-value instance slot-name)
-          (when slot-boundp
-            (let ((serialized-slot-value (serialize-object slot-value)))
-              (prependf value-maps `(',slot-name ,serialized-slot-value))
-              (lwhen (initarg (car (c2mop:slot-definition-initargs slotd)))
-                (prependf initargs `(,initarg ,serialized-slot-value))))))))
+    (do-bound-slots (slotd instance :name slot-name :value slot-value)
+      (let ((serialized-slot-value (serialize-object slot-value)))
+        (prependf value-maps `(',slot-name ,serialized-slot-value))
+        (lwhen (initarg (car (c2mop:slot-definition-initargs slotd)))
+          (prependf initargs `(,initarg ,serialized-slot-value)))))
     (values
      `(instancify
        (list ',(class-name class) ,@initargs)

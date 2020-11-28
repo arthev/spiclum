@@ -188,13 +188,10 @@ This is a low-level utility for use by other parts of the prevalence-system."
   "Checks whether SLOTS are all available as keys for INSTANCE."
   (let ((class (class-of instance))
         problem-slots problem-values)
-    (dolist (slotd slots)
-      (let* ((slot-name (c2mop:slot-definition-name slotd))
-             (slot-value (ignore-errors (slot-value instance slot-name))))
-        (when (slot-boundp instance slot-name)
-          (unless (prevalence-slot-available-p class slotd slot-value)
-            (push slotd problem-slots)
-            (push slot-value problem-values)))))
+    (do-bound-slots (slotd instance :slots slots :value slot-value)
+      (unless (prevalence-slot-available-p class slotd slot-value)
+        (push slotd problem-slots)
+        (push slot-value problem-values)))
     (values (not problem-slots) problem-slots problem-values)))
 
 ;;;; 3. Instance Insertion
@@ -224,13 +221,8 @@ This is a low-level utility for use by other parts of the prevalence-system."
         (error 'non-unique-unique-keys :breach-class class
                                        :breach-slots problem-slots
                                        :breach-values problem-values)))
-    (dolist (slotd slots)
-      (when (slot-boundp instance (c2mop:slot-definition-name slotd))
-        (prevalence-insert-class-slot
-         class
-         slotd
-         (slot-value instance (c2mop:slot-definition-name slotd))
-         instance)))))
+    (do-bound-slots (slotd instance :slots slots :value slot-value)
+      (prevalence-insert-class-slot class slotd slot-value instance))))
 
 (defun prevalence-insert-instances (instances)
   (let (finished current)
