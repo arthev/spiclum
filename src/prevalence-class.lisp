@@ -134,11 +134,7 @@ Thus, zero references to the object."
     ((metaclass prevalence-class) (class standard-class) name &rest args &key &allow-other-keys)
   (with-recursive-locks (all-prevalence-slot-locks-for class)
     (let* ((instances (find-all class))
-           (slotds->values-maps (let ((ht (make-hash-table :test #'eq)))
-                                  (dolist (instance instances)
-                                    (setf (gethash instance ht)
-                                          (slotds->values-map instance)))
-                                  ht))
+           (slotds->values-maps (mapcar #'slotds->values-map instances))
            (*instances-affected-by-redefinition* instances))
       (as-transaction
           ((:do (prevalence-remove-instances instances)
@@ -148,9 +144,9 @@ Thus, zero references to the object."
             :undo (with-ignored-prevalence
                     (apply #'call-next-method metaclass class
                            (last-class-definition name))
-                    (dolist (instance instances)
-                      (update-instance-for-slotds->values-map
-                       instance (gethash instance slotds->values-maps) :by-name t))))
+                    (mapc (rfix #'update-instance-for-slotds->values-map
+                                :by-name t)
+                          instances slotds->values-maps)))
            (:do (prevalence-insert-instances instances)
             :undo (prevalence-remove-instances instances)))
         (serialize-ensure-class-using-metaclass name args)
