@@ -179,3 +179,8 @@ Accepts a timezone, but doesn't (yet?) reflect the timezone in the output."
       (decode-universal-time time tz)
     (format nil "~4,'0D-~2,'0D-~2,'0D ~2,'0D:~2,'0D:~2,'0D"
             year month date hour minute second)))
+
+(defun list-directory-for-type (directory-pathname type)
+  (remove-if (complement (lfix #'string= type))
+             (cl-fad:list-directory directory-pathname)
+             :key #'pathname-type))

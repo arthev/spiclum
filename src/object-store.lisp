@@ -10,21 +10,24 @@
                                 timestamp)
                   :type type)))
 
+(defun most-recent-timestamped-file (directory-pathname type)
+  "Returns the most recent file, as per ansi timestamp."
+  (car (sort (list-directory-for-type directory-pathname type)
+             #'string-greaterp :key #'pathname-name)))
+
 (defun compute-timestamp (storage-path storage-timestamp)
   (if storage-timestamp
-      (let ((path (timestamped-storage-pathname storage-path storage-timestamp *world-filename*)))
-        (if (cl-fad:file-exists-p path)
-            storage-timestamp
-            (error "Can't find a file ~S as required to use STORAGE-TIMESTAMP ~s"
-                   path storage-timestamp)))
-      (let* ((worlds (remove-if (complement (lfix #'string= *world-filename*))
-                                (cl-fad:list-directory (cl-fad:pathname-directory-pathname storage-path))
-                                :key #'pathname-type))
-             (most-recent-world (car (sort worlds #'string-greaterp :key #'pathname-name))))
-        (if most-recent-world
-            (subseq (pathname-name most-recent-world)
-                    (1+ (length (pathname-name storage-path))))
-            (ANSI-time)))))
+      (progn (assert (cl-fad:file-exists-p
+                      (timestamped-storage-pathname
+                       storage-path storage-timestamp *world-filename*)))
+             storage-timestamp)
+      (lif (most-recent-world
+            (most-recent-timestamped-file
+             (cl-fad:pathname-directory-pathname storage-path)
+             *world-filename*))
+           (subseq (pathname-name most-recent-world)
+                   (1+ (length (pathname-name storage-path))))
+           (ANSI-time))))
 
 (defun update-prevalence-system-for-timestamp (instance timestamp)
   (with-accessors ((storage-path storage-path)) instance
