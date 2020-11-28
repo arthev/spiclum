@@ -156,8 +156,5 @@ Thus, zero references to the object."
 (defmethod make-instances-obsolete ((class prevalence-class))
   "Eagerly updates instances of CLASS, so ENSURE-CLASS-USING-METACLASS can be transactional."
   (call-next-method)
-  (dolist (instance *instances-affected-by-redefinition*)
-    ;; We don't have the argument list for UPDATE-INSTANCE-FOR-REDEFINED-CLASS
-    ;; on hand - but we know that instances will update when we try to access
-    ;; slot-values. Hence we do precisely that, to force an update.
-    (slot-values instance)))
+  ;; Force updates through accessing the slots of the affected instances.
+  (mapc #'slot-values *instances-affected-by-redefinition*))
