@@ -66,16 +66,14 @@
 ;;; Miscellaneous
 
 (defun instance->make-instance-form (instance)
-  ;; Not all slots have initargs, not all initargs become slot-values
-  (let ((class (class-of instance))
-        initargs value-maps)
+  (let (initargs value-maps)
     (do-bound-slots (slotd instance :name slot-name :value slot-value)
       (let ((serialized-slot-value (serialize-object slot-value)))
         (prependf value-maps `(',slot-name ,serialized-slot-value))
         (lwhen (initarg (car (c2mop:slot-definition-initargs slotd)))
           (prependf initargs `(,initarg ,serialized-slot-value)))))
     `(instancify
-      (list ',(class-name class) ,@initargs)
+      (list ',(class-name (class-of instance)) ,@initargs)
       ,@value-maps)))
 
 (defun instancify (instance-args &rest pairs)
