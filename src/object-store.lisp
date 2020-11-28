@@ -146,9 +146,13 @@
   (let ((slot-table
           (prevalence-lookup-store (class-name class)
                                    (c2mop:slot-definition-name slotd))))
-    (if (null new-value)
-        (remhash value slot-table)
-        (setf (gethash value slot-table) new-value))))
+    (setf (gethash value slot-table) new-value)))
+
+(defun clear-prevalence-lookup-class-slot (class slotd value)
+  (let ((slot-table
+          (prevalence-lookup-store (class-name class)
+                                   (c2mop:slot-definition-name slotd))))
+    (remhash value slot-table)))
 
 (defun prevalence-slot-available-p (class slotd value)
   "Checks whether the appropriate key is available."
@@ -221,7 +225,7 @@
   (flet ((unique-removal (using-class)
            (if (eq (prevalence-lookup-class-slot using-class slotd value)
                    object)
-               (setf (prevalence-lookup-class-slot using-class slotd value) nil)
+               (clear-prevalence-lookup-class-slot using-class slotd value)
                (error 'removing-nonexistant-entry
                       :breach-class using-class :breach-slots slotd
                       :breach-values value       :breach-object object))))
