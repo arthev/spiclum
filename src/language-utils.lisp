@@ -28,6 +28,23 @@ don't support that for SBCL."
 
 ;;;; 1. CLOS/MOP utils
 
+(defmacro do-bound-slots ((slot-var instance
+                           &key
+                             (slots nil slots-supplied-p)
+                             (value (gensym) value-supplied-p)
+                             (name (gensym)))
+                          &body body)
+  (let ((slots (if slots-supplied-p
+                   slots
+                   `(c2mop:class-slots (class-of ,instance)))))
+    `(dolist (,slot-var ,slots)
+       (let ((,name (c2mop:slot-definition-name ,slot-var)))
+         (when (slot-boundp ,instance ,name)
+           (let ((,value ,(if value-supplied-p
+                              `(slot-value ,instance ,name)
+                              nil)))
+             ,@body))))))
+
 (defun slot-by-name (class name)
   (find name (c2mop:class-slots class) :key #'c2mop:slot-definition-name))
 
@@ -63,23 +80,6 @@ don't support that for SBCL."
   (if (slot-boundp instance slot-name)
       (values (slot-value instance slot-name) t)
       (values nil nil)))
-
-(defmacro do-bound-slots ((slot-var instance
-                           &key
-                             (slots nil slots-supplied-p)
-                             (value (gensym) value-supplied-p)
-                             (name (gensym)))
-                          &body body)
-  (let ((slots (if slots-supplied-p
-                   slots
-                   `(c2mop:class-slots (class-of ,instance)))))
-    `(dolist (,slot-var ,slots)
-       (let ((,name (c2mop:slot-definition-name ,slot-var)))
-         (when (slot-boundp ,instance ,name)
-           (let ((,value ,(if value-supplied-p
-                              `(slot-value ,instance ,name)
-                              nil)))
-             ,@body))))))
 
 (defun find-slot-defining-class (class slotd)
   "Find the most specific slot-defining-class by
