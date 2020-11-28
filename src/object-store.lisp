@@ -2,7 +2,6 @@
 
 ;;;; -1. pathname helpers
 
-
 (defun timestamped-storage-pathname (storage-path timestamp type)
   (cl-fad:merge-pathnames-as-file
    storage-path
@@ -88,7 +87,6 @@
                  log initialized on ~A~%"
             (ANSI-time))))
 
-
 (defvar *world-filename* "world"
   "file ending for world files")
 
@@ -109,13 +107,10 @@
 
 (defun reset-uuid-seed-for-object-store ()
   (bt:with-recursive-lock-held ((uuid-seed-lock *prevalence-system*))
-    (let* ((class-table (gethash 'prevalence-object
-                                 (hash-store *prevalence-system*)))
-           (value-hash (when class-table (gethash 'uuid class-table))))
-      (when value-hash
-        (setf (uuid-seed *prevalence-system*)
-              (loop for uuid being the hash-keys of value-hash
-                    maximize uuid))))))
+    (let* ((slot-table (prevalence-lookup-store 'prevalence-object 'uuid)))
+      (setf (uuid-seed *prevalence-system*)
+            (loop for uuid being the hash-keys of slot-table
+                  maximize uuid)))))
 
 ;;;; 1. Class definition access
 
@@ -137,31 +132,25 @@ then SUPPLIED-CLASS and CLASS should be EQ."
 
 ;;;; 2. Instance Lookup
 
-(defun prevalence-lookup-class-slot (class slotd value)
-  "Looks up relevant entries for CLASS, SLOTD, VALUE.
+(defun prevalence-lookup-store (class-name slot-name)
+  "Lookup/create table mapping values for SLOT-NAME to prevalence-objects."
+  (let* ((slotd (slot-by-name (find-class class-name) slot-name))
+         (class-table (orf (gethash class-name
+                                    (hash-store *prevalence-system*))
+                           (make-hash-table))))
+    (orf (gethash slot-name class-table)
+         (make-hash-table :test (equality slotd)))))
 
-The keys in the PREVALENCE-SYSTEM HASH-STORE are the names of the CLASS and SLOTD.
-This is a low-level utility for use by other parts of the prevalence-system."
-  (handler-bind ((type-error
-                   (lambda (condition)
-                     (when (and (eq nil (type-error-datum condition))
-                                (eq 'hash-table (type-error-expected-type condition)))
-                       (return-from prevalence-lookup-class-slot nil)))))
-    (gethash value
-             (gethash (c2mop:slot-definition-name slotd)
-                      (gethash (class-name class)
-                               (hash-store *prevalence-system*))))))
+(defun prevalence-lookup-class-slot (class slotd value)
+  (gethash value
+           (prevalence-lookup-store (class-name class)
+                                    (c2mop:slot-definition-name slotd))))
 
 (defun (setf prevalence-lookup-class-slot) (new-value class slotd value)
-  "Sets the appropriate nested hash-lookup value, creates new tables as necessary."
-  (let* ((class-table (orf (gethash (class-name class)
-                                    (hash-store *prevalence-system*))
-                           (make-hash-table)))
-         (slot-table (orf (gethash (c2mop:slot-definition-name slotd) class-table)
-                          (make-hash-table :test (equality slotd)))))
-    ;; Can't we access e.g. indexes with nil as value, then?
-    ;; TEMPER - if there's no new value and we want to cease having an item available on the index,
-    ;; maybe that's for slot-makunbound?
+  "Sets the appropriate nested hash-lookup value."
+  (let ((slot-table
+          (prevalence-lookup-store (class-name class)
+                                   (c2mop:slot-definition-name slotd))))
     (if (null new-value)
         (remhash value slot-table)
         (setf (gethash value slot-table) new-value))))

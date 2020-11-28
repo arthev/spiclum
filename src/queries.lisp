@@ -5,16 +5,13 @@
   ;; Might be we need a :index key on all prevalence-objects
   ;; mapping to their direct classes. Then we can lookup the
   ;; relevant classes directly.
-  (let* ((class-table (gethash 'prevalence-object
-                               (hash-store *prevalence-system*)))
-         (value-hash (when class-table (gethash 'uuid class-table))))
-    (when value-hash
-      (loop for instance in (hash-values value-hash)
-            for instance-class = (class-of instance)
-            when (if strict
-                     (eq instance-class class)
-                     (c2mop:subclassp instance-class class))
-              collect instance))))
+  (let ((slot-table (prevalence-lookup-store 'prevalence-object 'uuid)))
+    (loop for instance being the hash-values of slot-table
+          for instance-class = (class-of instance)
+          when (if strict
+                   (eq instance-class class)
+                   (c2mop:subclassp instance-class class))
+            collect instance)))
 
 (defun find-by-uuid (uuid)
   (let ((class (find-class 'prevalence-object)))
