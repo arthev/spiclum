@@ -98,7 +98,7 @@
 (defmacro with-fixture-system ((sample-bottom-1-var sample-bottom-2-var)
                                &body body)
   (let ((store-var (gensym)))
-    `(let ((*prevalence-system* (make-instance 'prevalence-system)))
+    `(let ((*prevalence-system* (test-prevalence-system)))
        (multiple-value-bind (,store-var ,sample-bottom-1-var ,sample-bottom-2-var)
            (simple-sample-hash-store)
          (with-slots (hash-store) *prevalence-system*
@@ -106,6 +106,12 @@
          ,@body))))
 
 ;;;; Helpers
+
+(defun test-prevalence-system ()
+  (make-instance
+   'prevalence-system
+   :storage-path (make-pathname :directory "home/arthur/spiclum-test"
+                                :name "spiclum-test")))
 
 (defun check-lookup-finds-object-slotd-value-p (obj slotd value)
   (let ((using-class
@@ -284,7 +290,7 @@
 (5am:test :change-class-correctly-updates-lookups
   (destructuring-bind (top left right bottom) (hierarchy)
     (declare (ignorable top right bottom))
-    (let* ((*prevalence-system* (make-instance 'prevalence-system))
+    (let* ((*prevalence-system* (test-prevalence-system))
            (obj (make-instance 'left :pu-left "initial-pu-left" :middle 'tja :pu-top 5
                                      :i-top 19.0d0 :cu-top 'well :nil-top "didgeridoo"))
            (class/slotd/value-map (list (list (find-slot-defining-class left (slot-by-name left 'pu-left))
@@ -303,7 +309,7 @@
 (5am:test :change-class-correctly-restores-instance-on-error
   (destructuring-bind (top left right bottom) (hierarchy)
     (declare (ignorable top bottom))
-    (let* ((*prevalence-system* (make-instance 'prevalence-system))
+    (let* ((*prevalence-system* (test-prevalence-system))
            (left-obj  (make-instance 'left  :pu-left  "leftie" :middle 'tja))
            (right-obj (make-instance 'right :pu-right "right"  :middle 'tja)))
       (handler-case
@@ -322,7 +328,7 @@
 ;;;; Let's test class (re)definition
 
 (5am:test :class-definition-registers-in-prevalence-system
-  (let ((*prevalence-system* (make-instance 'prevalence-system)))
+  (let ((*prevalence-system* (test-prevalence-system)))
     (ignore-errors (setf (find-class 'class-definition-test-class) nil))
     (5am:is (zerop (hash-table-count (class-definition-store *prevalence-system*))))
     (eval '(defpclass class-definition-test-class ()
@@ -350,7 +356,7 @@
                      (mapcar (rfix #'getf :name) direct-slots)))))))
 
 (5am:test :class-definition-updates-object-store-indexes
-  (let ((*prevalence-system* (make-instance 'prevalence-system)))
+  (let ((*prevalence-system* (test-prevalence-system)))
     (ignore-errors (setf (find-class 'class-definition-test-class) nil))
     (5am:is (zerop (hash-table-count (class-definition-store *prevalence-system*))))
     (eval '(defpclass class-definition-test-class ()
@@ -372,7 +378,7 @@
 
 
 (5am:test :class-definition-errors-on-index-collision
-  (let ((*prevalence-system* (make-instance 'prevalence-system)))
+  (let ((*prevalence-system* (test-prevalence-system)))
     (ignore-errors (setf (find-class 'class-definition-test-class) nil))
     (5am:is (zerop (hash-table-count (class-definition-store *prevalence-system*))))
     (eval '(defpclass class-definition-test-class ()
@@ -408,7 +414,7 @@
                    (find-class 'class-definition-test-class))))))))
 
 (5am:test :class-redefinition-works-with-inheritance
-  (let ((*prevalence-system* (make-instance 'prevalence-system)))
+  (let ((*prevalence-system* (test-prevalence-system)))
     (ignore-errors (setf (find-class 'a-class) nil))
     (ignore-errors (setf (find-class 'b-class) nil))
     (eval '(defpclass a-class ()
