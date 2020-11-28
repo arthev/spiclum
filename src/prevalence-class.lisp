@@ -58,10 +58,18 @@
 
 ;;;; 1. Prevalencing actions specializing on prevalence-class
 
-(defun acceptable-persistent-slot-value-type-p (new-value)
+(defgeneric acceptable-persistent-slot-value-type-p (value)
+  (:documentation "Is VALUE an acceptable slot-value?
+
+Generally, that depends on if we can serialize VALUE."))
+
+(defmethod acceptable-persistent-slot-value-type-p (value)
   (c2mop:compute-applicable-methods-using-classes
    #'serialize-object
-   (list (class-of new-value))))
+   (list (class-of value))))
+
+(defmethod acceptable-persistent-slot-value-type-p ((thunk thunk))
+  t)
 
 (defmethod c2mop:slot-makunbound-using-class ((class prevalence-class)
                                               object

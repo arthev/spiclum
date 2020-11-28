@@ -207,9 +207,6 @@ acceptable-persistent-slot-value-type-p."))
   (assert (class-name class))
   `(find-class ',(class-name class)))
 
-(defmethod serialize-object ((thunk thunk))
-  (serialize-object (force thunk)))
-
 ;;;; 2. MOPy Action Serialization
 
 (defun serialize-slot-makunbound-using-class (class object slotd)
