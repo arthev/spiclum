@@ -29,52 +29,39 @@
 (defmethod force (object)
   object)
 
+(defmethod force ((string string))
+  string)
+
 (defmethod force ((thunk thunk))
   (with-slots (value %forced-p) thunk
-    (if %forced-p
-        (force value)
-        (progn (setf value (force (funcall value))
-                     %forced-p t)
-               value))))
+    (unless %forced-p
+      (setf value (force (funcall value))
+            %forced-p t))
+    (force value)))
 
-(defmethod force-thunks (obj)
-  t)
-
-(defmethod force-thunks ((string string))
-  t)
-
-(defmethod force-thunks ((tree list))
+(defmethod force ((tree list))
   ;; TODO: Handle circularity
-  (when (thunkp (car tree))
-    (setf (car tree)
-          (force (car tree))))
-  (when (thunkp (cdr tree))
-    (setf (cdr tree)
-          (force (cdr tree))))
-  (force-thunks (car tree))
-  (force-thunks (cdr tree)))
+  (setf (car tree) (force (car tree))
+        (cdr tree) (force (cdr tree)))
+  tree)
 
-(defmethod force-thunks ((array array))
-  (loop for i from 0 below (mklist (array-dimensions array))
-        for value = (row-major-aref array i)
-        do (if (thunkp value)
-              (setf (row-major-aref array i)
-                    (force value))
-              (force-thunks value))))
+(defmethod force ((array array))
+  (loop for i from 0 below (reduce #'* (mklist (array-dimensions array)))
+        do (setf (row-major-aref array i)
+                 (force (row-major-aref array i))))
+  array)
 
-;; TODO: Evaluate if force-thunks should return useful values for less looking before leaping etc.
-(defmethod force-thunks ((ht hash-table))
+(defmethod force ((ht hash-table))
   (dolist (key (hash-keys ht))
     (let ((value (gethash key ht)))
-      ;; Removing entry since destructively updating key can affect hash-value
+      ;; modified key implies potentially modified hash-value
       (remhash key ht)
-      (force-thunks key)
-      (force-thunks value)
       (setf (gethash (force key) ht)
-            (force value)))))
+            (force value))))
+  ht)
 
 (defun force-all-thunks ()
-  (mapc #'force-thunks (find-all (find-class 'prevalence-object))))
+  (mapc #'force (find-all (find-class 'prevalence-object))))
 
 ;;; Miscellaneous
 

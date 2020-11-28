@@ -16,12 +16,11 @@
       `(thunk (find-by-uuid ,(uuid instance)))
       `(find-by-uuid ,(uuid instance))))
 
-(defmethod force-thunks ((instance prevalence-object))
+(defmethod force ((instance prevalence-object))
   (do-bound-slots (slotd instance :name slot-name :value slot-value)
-    (if (thunkp slot-value)
-        (setf (slot-value instance slot-name)
-              (force slot-value))
-        (force-thunks slot-value))))
+    (setf (slot-value instance slot-name)
+          (force slot-value)))
+  instance)
 
 ;;;; -1. Helpers
 
