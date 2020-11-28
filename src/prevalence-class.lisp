@@ -118,8 +118,6 @@ Thus, zero references to the object."
       (as-transaction
           ((:do (prevalence-insert-instance instance)
             :undo (prevalence-remove-instance instance)))
-        ;; TODO: Think a bit about when to serialize etc. in case of errors
-        ;; to keep transactive nature. Or wrap &BODY in (error-handler...)?
         (serialize-make-instance instance initargs)
         instance))))
 
