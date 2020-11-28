@@ -27,14 +27,6 @@ don't support that for SBCL."
 
 ;;;; 1. CLOS/MOP utils
 
-(defun metaclass-of (obj)
-  "Returns two values: OBJ's metaclass, and whether (classp OBJ).
-
-Probably assumes no metaclasses have metaclasses."
-  (if (c2mop:classp obj)
-      (values (class-of obj) t)
-      (values (class-of (class-of obj)) nil)))
-
 (defun slot-by-name (class name)
   (find name (c2mop:class-slots class) :key #'c2mop:slot-definition-name))
 
