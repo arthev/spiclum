@@ -155,6 +155,6 @@ Thus, zero references to the object."
 
 (defmethod make-instances-obsolete ((class prevalence-class))
   "Eagerly updates instances of CLASS, so ENSURE-CLASS-USING-METACLASS can be transactional."
-  (call-next-method)
-  ;; Force updates through accessing the slots of the affected instances.
-  (mapc #'slot-values *instances-affected-by-redefinition*))
+  (prog1 (call-next-method)
+    ;; Force updates through accessing the slots of the affected instances.
+    (mapc #'slot-values *instances-affected-by-redefinition*)))
