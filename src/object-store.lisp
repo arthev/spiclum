@@ -117,21 +117,13 @@
 
 ;;;; 1. Class definition access
 
-(defun register-last-class-definition (metaclass class name &rest args)
+(defun register-last-class-definition (name args)
   (setf (gethash name (class-definition-store *prevalence-system*))
-        (list* metaclass class name args)))
+        (list* name args)))
 
-(defun last-class-definition (supplied-class supplied-name)
-  "Returns the previous class definition supplied to ensure-class-using-metaclass.
-
-Returns SUPPLIED-CLASS in place of the CLASS argument registered during the previous
-call, since CLASS might have been NIL during the previous call - and we'd get wrong
-behaviour if we supplied NIL once the class has been defined. If CLASS isn't NIL,
-then SUPPLIED-CLASS and CLASS should be EQ."
-  (destructuring-bind (metaclass class name &rest args)
-      (gethash supplied-name (class-definition-store *prevalence-system*))
-    (declare (ignore class))
-    (list* metaclass supplied-class name args)))
+(defun last-class-definition (name)
+  "Return previous class definition used in ensure-class-using-metaclass."
+  (gethash name (class-definition-store *prevalence-system*)))
 
 ;;;; 2. Instance Lookup
 

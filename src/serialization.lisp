@@ -244,11 +244,10 @@ acceptable-persistent-slot-value-type-p."))
   #-sbcl
   nil)
 
-(defun serialize-ensure-class-using-metaclass (class name args)
-  (declare (ignore class))
+(defun serialize-ensure-class-using-metaclass (name args)
   ;; Serialize as a call to ensure-class since that'll correctly handle
-  ;; updates on whether class exists or not, and also delegates to
-  ;; the e-c-u-c  reliant implementation of e-c-u-m.
+  ;; updates on whether class exists or not. It also delegates to
+  ;; the e-c-u-c-reliant implementation of e-c-u-m.
   (let* ((args (remove-properties *e-c-u-m-args-filter* args))
          (slot-args (mapcar (lfix #'remove-properties *e-c-u-m-slots-filter*)
                             (getf args :direct-slots)))

@@ -128,8 +128,8 @@ Thus, zero references to the object."
 (defmethod c2mop:ensure-class-using-metaclass
     ((metaclass prevalence-class) (class null) name &rest args &key)
   (let ((updated-class (call-next-method)))
-    (apply #'register-last-class-definition metaclass class name args)
-    (serialize-ensure-class-using-metaclass class name args)
+    (register-last-class-definition name args)
+    (serialize-ensure-class-using-metaclass name args)
     updated-class))
 
 (defmethod c2mop:ensure-class-using-metaclass
@@ -148,14 +148,15 @@ Thus, zero references to the object."
            ;; CLASS (being non-nil) should be the return value of CALL-NEXT-METHOD
            (:do (with-ignored-prevalence (call-next-method))
             :undo (with-ignored-prevalence
-                    (apply #'call-next-method (last-class-definition class name))
+                    (apply #'call-next-method metaclass class
+                           (last-class-definition name))
                     (dolist (instance instances)
                       (update-instance-for-slotds->values-map
                        instance (gethash instance slotds->values-maps) :by-name t))))
            (:do (prevalence-insert-instances instances)
             :undo (prevalence-remove-instances instances)))
-        (serialize-ensure-class-using-metaclass class name args)
-        (apply #'register-last-class-definition metaclass class name args)
+        (serialize-ensure-class-using-metaclass name args)
+        (register-last-class-definition name args)
         class))))
 
 (defmethod make-instances-obsolete ((class prevalence-class))

@@ -22,9 +22,7 @@ and the set of instances of prevalence-object."
     (maphash
      (lambda (name last-definition)
        (declare (ignore name))
-       (destructuring-bind (metaclass class name &rest args) last-definition
-         (declare (ignore metaclass))
-         (serialize-ensure-class-using-metaclass class name args)))
+       (apply #'serialize-ensure-class-using-metaclass last-definition))
      (class-definition-store *prevalence-system*))
     (dolist (object (find-all (find-class 'prevalence-object)))
       (serialize-make-instance object))))
