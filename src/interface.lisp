@@ -15,7 +15,7 @@
   "Save a new file as per *PREVALENCE-SYSTEM*'s STORAGE-PATH with time-of-call.
 
 Writes the set of class definitions for prevalence-classes,
-and the set of instances of prevalence-object.".
+and the set of instances of prevalence-object."
   (update-prevalence-system-for-timestamp *prevalence-system*
                                           (timestamp-for-new-world))
   (let ((*saving-world-p* t))

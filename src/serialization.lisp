@@ -76,17 +76,6 @@
       (setf (gethash (force key) ht)
             (force value)))))
 
-(defmethod force-thunks ((instance prevalence-object))
-  (dolist (slotd (c2mop:class-slots (class-of instance)))
-    (let ((slot-name (c2mop:slot-definition-name slotd)))
-      (multiple-value-bind (slot-value slot-boundp)
-          (guarded-slot-value instance slot-name)
-        (when slot-boundp
-          (if (thunkp slot-value)
-              (setf (slot-value instance slot-name)
-                    (force slot-value))
-              (force-thunks slot-value)))))))
-
 (defun force-all-thunks ()
   (mapc #'force-thunks (find-all (find-class 'prevalence-object))))
 
