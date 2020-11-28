@@ -46,6 +46,8 @@ don't support that for SBCL."
              ,@body))))))
 
 (defun slot-by-name (class name)
+  (unless (c2mop:class-finalized-p class)
+    (c2mop:finalize-inheritance class))
   (find name (c2mop:class-slots class) :key #'c2mop:slot-definition-name))
 
 (defun slotds->values-map (instance)
