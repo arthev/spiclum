@@ -192,23 +192,31 @@ acceptable-persistent-slot-value-type-p."))
 
 ;;;; 2. MOPy Action Serialization
 
-(defun serialize-slot-makunbound-using-class (class object slotd)
-  (serialize-write
-   `(c2mop:slot-makunbound-using-class ,(serialize-object class)
-                                       ,(serialize-object object)
+(defgeneric serialize (generic &key &allow-other-keys)
+  (:documentation "keyword params per method generally match GENERIC."))
+
+(defmethod serialize :around (generic &key &allow-other-keys)
+  (when *persisting-p*
+    (serialize-write (call-next-method))))
+
+(defmethod serialize ((generic (eql :slot-makunbound-using-class))
+                      &key class object slotd)
+  `(c2mop:slot-makunbound-using-class ,(serialize-object class)
+                                      ,(serialize-object object)
+                                      (slot-by-name ,(serialize-object class)
+                                                    ',(c2mop:slot-definition-name slotd))))
+
+(defmethod serialize ((generic (eql :setf-slot-value-using-class))
+                      &key new-value class instance slotd)
+  `(setf (c2mop:slot-value-using-class ,(serialize-object class)
+                                       ,(serialize-object instance)
                                        (slot-by-name ,(serialize-object class)
-                                                     ',(c2mop:slot-definition-name slotd)))))
+                                                     ',(c2mop:slot-definition-name slotd)))
+         ,(serialize-object new-value)))
 
-(defun serialize-setf-slot-value-using-class (new-value class instance slotd)
-  (serialize-write
-   `(setf (c2mop:slot-value-using-class ,(serialize-object class)
-                                        ,(serialize-object instance)
-                                        (slot-by-name ,(serialize-object class)
-                                                      ',(c2mop:slot-definition-name slotd)))
-          ,(serialize-object new-value))))
-
-(defun serialize-make-instance (instance)
-  (serialize-write (instance->make-instance-form instance)))
+(defmethod serialize ((generic (eql :make-instance))
+                      &key instance)
+  (instance->make-instance-form instance))
 
 (defparameter *e-c-u-m-args-filter*
   #+sbcl
@@ -222,7 +230,8 @@ acceptable-persistent-slot-value-type-p."))
   #-sbcl
   nil)
 
-(defun serialize-ensure-class-using-metaclass (name args)
+(defmethod serialize ((generic (eql :ensure-class-using-metaclass))
+                      &key name args)
   ;; Serialize as a call to ensure-class since that'll correctly handle
   ;; updates on whether class exists or not. It also delegates to
   ;; the e-c-u-c-reliant implementation of e-c-u-m.
@@ -244,33 +253,30 @@ acceptable-persistent-slot-value-type-p."))
                                             collect key
                                             and collect (serialize-object value))))
                             slot-args))))
-    (serialize-write
-     `(c2mop:ensure-class
-       ,(serialize-object name)
-       :direct-slots
-       ,serialized-slot-args
-       ,@serialized-args))))
+    `(c2mop:ensure-class
+      ,(serialize-object name)
+      :direct-slots
+      ,serialized-slot-args
+      ,@serialized-args)))
 
+(defmethod serialize ((generic (eql :change-class))
+                      &key instance new-class initargs)
+  `(change-class ,(serialize-object instance)
+                 ,(serialize-object new-class)
+                 ,@(mapcar #'serialize-object initargs)))
 
-(defun serialize-change-class (instance new-class initargs)
-  (serialize-write
-   `(change-class ,(serialize-object instance)
-                  ,(serialize-object new-class)
-                  ,@(mapcar #'serialize-object initargs))))
-
-(defun serialize-reinitialize-instance (instance initargs)
-  (serialize-write
-   `(reinitialize-instance ,(serialize-object instance)
-                           ,@(mapcar #'serialize-object initargs))))
+(defmethod serialize ((generic (eql :reinitialize-instance))
+                      &key instance initargs)
+  `(reinitialize-instance ,(serialize-object instance)
+                          ,@(mapcar #'serialize-object initargs)))
 ;;;; 3. IO
 
 (defun serialize-write (form)
-  (when *persisting-p*
-    (bt:with-lock-held (*serialization-lock*)
-      (with-open-file (out (if *saving-world-p*
-                               (world-file *prevalence-system*)
-                               (log-file *prevalence-system*))
-                           :direction :output
-                           :if-exists :append
-                           :if-does-not-exist :create)
-        (format out "~S~%" form)))))
+  (bt:with-lock-held (*serialization-lock*)
+    (with-open-file (out (if *saving-world-p*
+                             (world-file *prevalence-system*)
+                             (log-file *prevalence-system*))
+                         :direction :output
+                         :if-exists :append
+                         :if-does-not-exist :create)
+      (format out "~S~%" form))))

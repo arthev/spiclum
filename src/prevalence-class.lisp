@@ -79,7 +79,8 @@ Generally, that depends on if we can serialize VALUE."))
     (let ((result (call-next-method)))
       (when slot-boundp
         (prevalence-remove-class-slot class slotd old-value object))
-      (serialize-slot-makunbound-using-class class object slotd)
+      (serialize :slot-makunbound-using-class
+                 :class class :object object :slotd slotd)
       result)))
 
 (defmethod (setf c2mop:slot-value-using-class) :around (new-value
@@ -104,7 +105,8 @@ Must atomatically update indexes and persist as appropriate."
                         (slot-makunbound instance (c2mop:slot-definition-name slotd))))
              (:do (prevalence-insert-class-slot class slotd new-value instance)
               :undo (prevalence-remove-class-slot class slotd new-value instance)))
-          (serialize-setf-slot-value-using-class new-value class instance slotd)
+          (serialize :setf-slot-value-using-class
+                     :new-value new-value :class class :instance instance :slotd slotd)
           (values-list results))))))
 
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)
@@ -118,7 +120,7 @@ Thus, zero references to the object."
       (as-transaction
           ((:do (prevalence-insert-instance instance)
             :undo (prevalence-remove-instance instance)))
-        (serialize-make-instance instance)
+        (serialize :make-instance :instance instance)
         instance))))
 
 (defvar *instances-affected-by-redefinition* nil)
@@ -127,7 +129,7 @@ Thus, zero references to the object."
     ((metaclass prevalence-class) (class null) name &rest args &key)
   (let ((updated-class (call-next-method)))
     (register-last-class-definition name args)
-    (serialize-ensure-class-using-metaclass name args)
+    (serialize :ensure-class-using-metaclass :name name :args args)
     updated-class))
 
 (defmethod c2mop:ensure-class-using-metaclass
@@ -148,7 +150,7 @@ Thus, zero references to the object."
                           instances slot->value-maps)))
            (:do (prevalence-insert-instances instances)
             :undo (prevalence-remove-instances instances)))
-        (serialize-ensure-class-using-metaclass name args)
+        (serialize :ensure-class-using-metaclass :name name :args args)
         (register-last-class-definition name args)
         class))))
 
