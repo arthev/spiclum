@@ -118,7 +118,7 @@ Thus, zero references to the object."
       (as-transaction
           ((:do (prevalence-insert-instance instance)
             :undo (prevalence-remove-instance instance)))
-        (serialize-make-instance instance initargs)
+        (serialize-make-instance instance)
         instance))))
 
 (defvar *instances-affected-by-redefinition* nil)

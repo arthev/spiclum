@@ -74,11 +74,9 @@
         (prependf value-maps `(',slot-name ,serialized-slot-value))
         (lwhen (initarg (car (c2mop:slot-definition-initargs slotd)))
           (prependf initargs `(,initarg ,serialized-slot-value)))))
-    (values
-     `(instancify
-       (list ',(class-name class) ,@initargs)
-       ,@value-maps)
-     initargs)))
+    `(instancify
+      (list ',(class-name class) ,@initargs)
+      ,@value-maps)))
 
 (defun instancify (instance-args &rest pairs)
   (assert (evenp (length pairs)))
@@ -211,13 +209,8 @@ acceptable-persistent-slot-value-type-p."))
                                                       ',(c2mop:slot-definition-name slotd)))
           ,(serialize-object new-value))))
 
-(defun serialize-make-instance (instance &optional initargs)
-  (multiple-value-bind (serialization-form serialized-initargs)
-      (instance->make-instance-form instance)
-    ;; TODO: Throw a specific serialization error instead?
-    (assert (subsetp (plist-keys initargs)
-                     (plist-keys serialized-initargs)))
-    (serialize-write serialization-form)))
+(defun serialize-make-instance (instance)
+  (serialize-write (instance->make-instance-form instance)))
 
 (defparameter *e-c-u-m-args-filter*
   #+sbcl
