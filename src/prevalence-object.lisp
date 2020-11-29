@@ -31,11 +31,11 @@
      (let ((slot-name (c2mop:slot-definition-name slotd)))
        (multiple-value-bind (value present-p)
            (gethash slot-name map)
-         (when (and present-p
-                    (slot-boundp instance slot-name))
-           (funcall (equality slotd)
-                    value
-                    (slot-value instance slot-name))))))
+         (multiple-value-bind (slot-value boundp)
+             (guarded-slot-value instance slot-name)
+           (or (not (or present-p boundp))
+               (and present-p boundp
+                    (funcall (equality slotd) value slot-value)))))))
    (c2mop:class-slots (class-of instance))))
 
 ;;;; 0. Prevalencing actions specializing on prevalence-object
