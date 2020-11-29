@@ -244,7 +244,7 @@ acceptable-persistent-slot-value-type-p."))
                collect (serialize-slot-spec-prop prop value slot-spec))))
 
 (defun serialize-slot-spec-prop (prop value slot-spec)
-  (cons prop (if (eq :initfunction prop)
+  (list prop (if (eq :initfunction prop)
                  `(lambda () ,(getf slot-spec :initform))
                  (serialize-object value))))
 
