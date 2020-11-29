@@ -77,16 +77,16 @@ don't support that for SBCL."
   "Find the most specific slot-defining-class by
    searching through CLASS's precedence list until
    the first hit for a direct-slot-definition."
-  (assert slotd)
-  (find-if (lambda (candidate-class)
-             (find-if (rfix #'direct-effective-slot-equivalence slotd)
-                      (c2mop:class-direct-slots candidate-class)))
+  (check-type slotd c2mop:standard-slot-definition)
+  (find-if (rfix #'class-defines-slot-p slotd)
            (c2mop:class-precedence-list class)))
 
-;; TODO: Something hereabouts looks funky.
-(defun direct-effective-slot-equivalence (direct-slot effective-slot)
-  (eq (c2mop:slot-definition-name direct-slot)
-      (c2mop:slot-definition-name effective-slot)))
+(defun class-defines-slot-p (class slotd)
+  (find-if (rfix #'slot-name-equivalence slotd)
+           (c2mop:class-direct-slots class)))
+
+(defun slot-name-equivalence (&rest slots)
+  (reduce #'eq slots :key #'c2mop:slot-definition-name))
 
 ;;;; 2. CLOS/MOP extensions
 
