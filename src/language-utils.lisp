@@ -159,7 +159,10 @@ Non-local exits from BODY do not trigger rollback as above."
             (progn
               ,@dos-and-flags
               (setf ,success-sym t)
-              ,@body)
+              (handler-bind ((error (lambda (e)
+                                      (declare (ignore e))
+                                      (setf ,success-sym nil))))
+                ,@body))
          (unless ,success-sym
            ,@undos-in-whens)))))
 
