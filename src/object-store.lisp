@@ -279,16 +279,14 @@
              (assert slot-defining-class)
              (prevalence-lookup-lock (class-name slot-defining-class)
                                      (c2mop:slot-definition-name slotd)))))
-    (remove nil
-            (mapcar (lambda (slotd)
-                      (ccase (key slotd)
-                        (:class-unique (prevalence-lookup-lock
-                                        (class-name class)
-                                        (c2mop:slot-definition-name slotd)))
-                        (:index (lock-for-slot-defining-class slotd))
-                        (:precedence-unique (lock-for-slot-defining-class slotd))
-                        ((nil) nil)))
-                    slotds))))
+    (loop for slotd in slotds
+          when (key slotd)
+            collect (ccase (key slotd)
+                      (:class-unique (prevalence-lookup-lock
+                                      (class-name class)
+                                      (c2mop:slot-definition-name slotd)))
+                      (:index (lock-for-slot-defining-class slotd))
+                      (:precedence-unique (lock-for-slot-defining-class slotd))))))
 
 (defun all-prevalence-slot-locks-for (obj)
   (let ((class (if (c2mop:classp obj) obj (class-of obj))))
