@@ -76,12 +76,11 @@ Generally, that depends on if we can serialize VALUE."))
                                               slotd)
   (multiple-value-bind (old-value slot-boundp)
       (guarded-slot-value object (c2mop:slot-definition-name slotd))
-    (let ((result (call-next-method)))
+    (prog1 (call-next-method)
       (when slot-boundp
         (prevalence-remove-class-slot class slotd old-value object))
       (serialize :slot-makunbound-using-class
-                 :class class :object object :slotd slotd)
-      result)))
+                 :class class :object object :slotd slotd))))
 
 (defmethod (setf c2mop:slot-value-using-class) :around (new-value
                                                         (class prevalence-class)
@@ -127,10 +126,9 @@ Thus, zero references to the object."
 
 (defmethod c2mop:ensure-class-using-metaclass
     ((metaclass prevalence-class) (class null) name &rest args &key)
-  (let ((updated-class (call-next-method)))
+  (prog1 (call-next-method)
     (register-last-class-definition name args)
-    (serialize :ensure-class-using-metaclass :name name :args args)
-    updated-class))
+    (serialize :ensure-class-using-metaclass :name name :args args)))
 
 (defmethod c2mop:ensure-class-using-metaclass
     ((metaclass prevalence-class) (class standard-class) name &rest args &key &allow-other-keys)

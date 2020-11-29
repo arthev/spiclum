@@ -52,10 +52,9 @@ don't support that for SBCL."
 
 (defun slot->value-map (instance)
   "Hash-table of slot-names->values. Unbound slots aren't keyed."
-  (let ((hash-table (make-hash-table)))
+  (prog1-let (hash-table (make-hash-table))
     (do-bound-slots (slotd instance :value slot-value :name slot-name)
-      (setf (gethash slot-name hash-table) slot-value))
-    hash-table))
+      (setf (gethash slot-name hash-table) slot-value))))
 
 (defun update-instance-for-slot->value-map (instance map)
   "Update all of INSTANCE's slot values to match MAP."

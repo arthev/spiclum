@@ -110,7 +110,7 @@
 
 (defun reset-uuid-seed-for-object-store ()
   (bt:with-recursive-lock-held ((uuid-seed-lock *prevalence-system*))
-    (let* ((slot-table (prevalence-lookup-store 'prevalence-object 'uuid)))
+    (let ((slot-table (prevalence-lookup-store 'prevalence-object 'uuid)))
       (setf (uuid-seed *prevalence-system*)
             (loop for uuid being the hash-keys of slot-table
                   maximize uuid)))))

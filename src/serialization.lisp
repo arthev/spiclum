@@ -78,28 +78,21 @@
 
 (defun instancify (instance-args &rest pairs)
   (assert (evenp (length pairs)))
-  (let ((instance (apply #'make-instance instance-args)))
+  (prog1-let (instance (apply #'make-instance instance-args))
     (loop for (slot-name value) on pairs by #'cddr
-          do (setf (slot-value instance slot-name) value))
-    instance))
+          do (setf (slot-value instance slot-name) value))))
 
 (defun hashify (hash-args &rest pairs)
   (assert (evenp (length pairs)))
-  (assert (equal '(:test :size :rehash-size :rehash-threshold)
-                 (plist-keys hash-args)))
-  (let ((ht (apply #'make-hash-table hash-args)))
+  (prog1-let (ht (apply #'make-hash-table hash-args))
     (loop for (key value) on pairs by #'cddr
-          do (setf (gethash key ht) value))
-    ht))
+          do (setf (gethash key ht) value))))
 
 (defun arrayify (array-args &rest elts)
-  (assert (equal '(:element-type :adjustable :fill-pointer)
-                 (plist-keys (cdr array-args))))
-  (let ((array (apply #'make-array array-args)))
+  (prog1-let (array (apply #'make-array array-args))
     (loop for i from 0
           for elt in elts
-          do (setf (row-major-aref array i) elt))
-    array))
+          do (setf (row-major-aref array i) elt))))
 
 ;;;; 1. Data Serialization
 
