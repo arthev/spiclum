@@ -161,7 +161,8 @@
       (check-findings bottom 'i-bottom (list nil  nil   nil   bottom)))))
 
 (5am:test :prevalence-slot-locks-finds-locks-with-expected-names
-  (let ((bottom (find-class 'bottom)))
+  (let* ((*prevalence-system* (test-prevalence-system))
+         (bottom (find-class 'bottom)))
     (destructuring-bind (pu-top-lock middle-lock i-bottom-lock)
         (prevalence-slot-locks bottom (mapcar (lfix #'slot-by-name bottom)
                                               '(pu-top middle i-bottom)))

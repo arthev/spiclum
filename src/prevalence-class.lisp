@@ -126,12 +126,16 @@ Thus, zero references to the object."
 
 (defmethod c2mop:ensure-class-using-metaclass
     ((metaclass prevalence-class) (class null) name &rest args &key)
+  (unless *prevalence-system*
+    (return-from c2mop:ensure-class-using-metaclass (call-next-method)))
   (prog1 (call-next-method)
     (register-last-class-definition name args)
     (serialize :ensure-class-using-metaclass :name name :args args)))
 
 (defmethod c2mop:ensure-class-using-metaclass
     ((metaclass prevalence-class) (class standard-class) name &rest args &key &allow-other-keys)
+  (unless *prevalence-system*
+    (return-from c2mop:ensure-class-using-metaclass (call-next-method)))
   (with-recursive-locks (all-prevalence-slot-locks-for class)
     (let* ((instances (find-all class))
            (slot->value-maps (mapcar #'slot->value-map instances))

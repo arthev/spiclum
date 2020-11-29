@@ -38,6 +38,21 @@
           (log-file instance)
           (timestamped-storage-pathname storage-path timestamp *log-filename*))))
 
+(defun initialize-prevalence-system-files (instance)
+  ;; Log initialization time as comment for debug convenience
+  (with-open-file (out (log-file instance)
+                       :direction :output
+                       :if-exists :append
+                       :if-does-not-exist :create)
+    (format out "~%;; PREVALENCE-SYSTEM targetting this ~
+                 log initialized at ~A~%"
+            (ANSI-time)))
+  ;; Create an empty world file if none exists
+  (with-open-file (out (world-file instance)
+                       :direction :output
+                       :if-exists nil
+                       :if-does-not-exist :create)))
+
 ;;;; 0. Basic definitions
 
 ;; The "canonical" basic lookup is on the unique IDs, so those
@@ -82,13 +97,7 @@
   (ensure-directories-exist storage-path)
   (let ((timestamp (compute-timestamp storage-path storage-timestamp)))
     (update-prevalence-system-for-timestamp instance timestamp))
-  (with-open-file (out (log-file instance)
-                       :direction :output
-                       :if-exists :append
-                       :if-does-not-exist :create)
-    (format out "~%;; PREVALENCE-SYSTEM targetting this ~
-                 log initialized on ~A~%"
-            (ANSI-time))))
+  (initialize-prevalence-system-files instance))
 
 (defvar *world-filename* "world"
   "file ending for world files")
@@ -99,10 +108,7 @@
 (defparameter *prevalencing-p* t
   "Toggle for whether to update the object store")
 
-(defvar *prevalence-system*
-  (make-instance 'prevalence-system
-                 :storage-path (make-pathname :directory "home/arthur/spiclum-test"
-                                              :name "spiclum-test")))
+(defvar *prevalence-system* nil)
 
 (defun generate-uuid-for-object-store ()
   (bt:with-recursive-lock-held ((uuid-seed-lock *prevalence-system*))

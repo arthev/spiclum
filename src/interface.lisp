@@ -22,12 +22,17 @@ and the set of instances of prevalence-object."
     (maphash
      (lambda (name last-definition)
        (declare (ignore name))
-       (apply #'serialize-ensure-class-using-metaclass last-definition))
+       (apply #'serialize :ensure-class-using-metaclass last-definition))
      (class-definition-store *prevalence-system*))
     (dolist (object (find-all (find-class 'prevalence-object)))
-      (serialize-make-instance object))))
+      (serialize :make-instance :object object))))
 
-(defun load-world ()
+(defun load-world (directory name)
+  ;; e.g. directory "home/arthur/spiclum-test" name "spiclum-test"
+  (setf *prevalence-system*
+        (make-instance 'prevalence-system
+                       :storage-path (make-pathname :directory directory
+                                                    :name name)))
   (let ((*package* (find-package :spiclum))
         (*persisting-p* nil))
     (load (world-file *prevalence-system*))
