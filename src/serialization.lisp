@@ -223,34 +223,38 @@ acceptable-persistent-slot-value-type-p."))
   #-sbcl
   nil)
 
+(defun filter-e-c-u-m-args (args)
+  (let* ((args (remove-properties *e-c-u-m-args-filter* args))
+         (slot-arg (mapcar (lfix #'remove-properties *e-c-u-m-slots-filter*)
+                           (getf args :direct-slots))))
+    (replace-property :direct-slots slot-arg args)))
+
+(defun serialize-e-c-u-m-args (args)
+  (let* ((most-args (mapcar #'serialize-object
+                            (remove-properties '(:direct-slots) args)))
+         (slot-args
+           `(:direct-slots
+             (list ,@(mapcar #'serialize-slot-spec
+                             (getf args :direct-slots))))))
+    (list* slot-args most-args)))
+
+(defun serialize-slot-spec (slot-spec)
+  (apply #'append '(list)
+         (loop for (prop value) on slot-spec by #'cddr
+               collect (serialize-slot-spec-prop prop value slot-spec))))
+
+(defun serialize-slot-spec-prop (prop value slot-spec)
+  (cons prop (if (eq :initfunction prop)
+                 `(lambda () ,(getf slot-spec :initform))
+                 (serialize-object value))))
+
 (defmethod serialize ((generic (eql :ensure-class-using-metaclass))
                       &key name args)
-  ;; Serialize as a call to ensure-class since that'll correctly handle
-  ;; updates on whether class exists or not. It also delegates to
-  ;; the e-c-u-c-reliant implementation of e-c-u-m.
-  (let* ((args (remove-properties *e-c-u-m-args-filter* args))
-         (slot-args (mapcar (lfix #'remove-properties *e-c-u-m-slots-filter*)
-                            (getf args :direct-slots)))
-         (serialized-args (mapcar #'serialize-object
-                                  (remove-properties '(:direct-slots) args)))
-         (serialized-slot-args
-           `(list ,@(mapcar (lambda (slot-spec)
-                              ;; This could be a method for serializing slot properties instead
-                              (cons 'list
-                                    (loop for (key value) on slot-spec by #'cddr
-                                          if (eq :initfunction key)
-                                            collect key
-                                            and collect `(lambda ()
-                                                           ,(getf slot-spec :initform))
-                                          else
-                                            collect key
-                                            and collect (serialize-object value))))
-                            slot-args))))
+  ;; Serialize as ensure-class since that handles whether class exists.
+  (let ((args (filter-e-c-u-m-args args)))
     `(c2mop:ensure-class
       ,(serialize-object name)
-      :direct-slots
-      ,serialized-slot-args
-      ,@serialized-args)))
+      ,@(serialize-e-c-u-m-args args))))
 
 (defmethod serialize ((generic (eql :change-class))
                       &key instance new-class initargs)
