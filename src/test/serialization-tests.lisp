@@ -4,10 +4,25 @@
 
 (5am:in-suite :prevalence.unit.serialization)
 
-(defmacro data-tests (obj &optional (comp 'equalp))
+(defmacro data-tests (obj &optional (comp '#'equalp))
   `(progn
      (5am:is (not (eq ,obj (serialize-object ,obj))))
-     (5am:is (,comp ,obj (eval (serialize-object ,obj))))))
+     (5am:is (funcall ,comp ,obj (eval (serialize-object ,obj))))))
+
+(defun instance-slot-equal (slotd instance1 instance2 &key (test #'eql))
+  (let ((slot-name (c2mop:slot-definition-name slotd)))
+    (or (not (or (slot-boundp instance1 slot-name)
+                 (slot-boundp instance2 slot-name)))
+        (and (slot-boundp instance1 slot-name)
+             (slot-boundp instance2 slot-name)
+             (funcall test
+                      (slot-value instance1 slot-name)
+                      (slot-value instance2 slot-name))))))
+
+(defun instance-equal (instance1 instance2 &key (test #'eql))
+  (and (eq (class-of instance1) (class-of instance2))
+       (every (rfix #'instance-slot-equal instance1 instance2 :test test)
+              (c2mop:class-slots (class-of instance1)))))
 
 (defun analogue-call-data (original serialized)
   (if (symbolp original)
@@ -75,11 +90,22 @@
           do (setf (gethash key ht) value))
     (data-tests ht)))
 
+(5am:test :make-instance-serialization
+  (let* ((*prevalence-system* (test-prevalence-system))
+         (bottom (apply #'make-instance 'bottom
+                        *sample-bottom-unoccupied-plist*))
+         (*prevalence-system* (test-prevalence-system))
+         (serialized (serialize :make-instance :instance bottom))
+         (new-bottom (eval serialized)))
+    (5am:is (not (eq bottom serialized)))
+    (5am:is (not (eq bottom new-bottom)))
+    (5am:is (instance-equal bottom new-bottom :test #'equalp))))
+
 (5am:test :instance-as-lookup-serialization
   (let* ((*prevalence-system* (test-prevalence-system))
          (bottom (apply #'make-instance 'bottom
                         *sample-bottom-unoccupied-plist*)))
-    (data-tests bottom eq)))
+    (data-tests bottom #'eq)))
 
 (5am:test :slot-makunbound-using-class-serialization
   (let* ((*prevalence-system* (test-prevalence-system))
@@ -109,8 +135,6 @@
       (let ((serialized (key-args (new-value class instance slotd)
                                   serialize :setf-slot-value-using-class)))
         (5am:is (call-equal call serialized))))))
-
-;; make-instance
 
 ;; ensure-class-using-metaclass
 

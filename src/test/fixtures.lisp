@@ -69,7 +69,7 @@
 ;;;; Fixtures
 
 (defparameter *sample-bottom-unoccupied-plist*
-  (list :i-bottom 5 :middle 'joda :pu-left "ham" :pu-right "hogr" :pu-top "tap" :i-top 19.0d0 :cu-top 'tja :nil-top 55))
+  (list :i-bottom #(1 2 3) :middle 'joda :pu-left "ham" :pu-right "hogr" :pu-top "tap" :i-top 19.0d0 :cu-top 'tja :nil-top 55))
 
 (defun simple-sample-hash-store ()
   (let* ((plist1 (list :i-bottom 5 :middle 'oida  :pu-left "hmm" :pu-right "rett" :pu-top "top" :i-top 19   :cu-top 'hmm :nil-top 55 :uuid -1))
