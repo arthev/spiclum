@@ -79,8 +79,7 @@ Generally, that depends on if we can serialize VALUE."))
     (prog1 (call-next-method)
       (when slot-boundp
         (prevalence-remove-class-slot class slotd old-value object))
-      (serialize :slot-makunbound-using-class
-                 :class class :object object :slotd slotd))))
+      (key-args (class object slotd) serialize :slot-makunbound-using-class))))
 
 (defmethod (setf c2mop:slot-value-using-class) :around (new-value
                                                         (class prevalence-class)
@@ -104,8 +103,7 @@ Must atomatically update indexes and persist as appropriate."
                         (slot-makunbound instance (c2mop:slot-definition-name slotd))))
              (:do (prevalence-insert-class-slot class slotd new-value instance)
               :undo (prevalence-remove-class-slot class slotd new-value instance)))
-          (serialize :setf-slot-value-using-class
-                     :new-value new-value :class class :instance instance :slotd slotd)
+          (key-args (new-value class instance slotd) serialize :setf-slot-value-using-class)
           (values-list results))))))
 
 (defmethod make-instance ((class prevalence-class) &rest initargs &key)
@@ -119,7 +117,7 @@ Thus, zero references to the object."
       (as-transaction
           ((:do (prevalence-insert-instance instance)
             :undo (prevalence-remove-instance instance)))
-        (serialize :make-instance :instance instance)
+        (key-args (instance) serialize :make-instance)
         instance))))
 
 (defvar *instances-affected-by-redefinition* nil)
@@ -130,7 +128,7 @@ Thus, zero references to the object."
     (return-from c2mop:ensure-class-using-metaclass (call-next-method)))
   (prog1 (call-next-method)
     (register-last-class-definition name args)
-    (serialize :ensure-class-using-metaclass :name name :args args)))
+    (key-args (name args) serialize :ensure-class-using-metaclass)))
 
 (defmethod c2mop:ensure-class-using-metaclass
     ((metaclass prevalence-class) (class standard-class) name &rest args &key &allow-other-keys)
@@ -152,7 +150,7 @@ Thus, zero references to the object."
                           instances slot->value-maps)))
            (:do (prevalence-insert-instances instances)
             :undo (prevalence-remove-instances instances)))
-        (serialize :ensure-class-using-metaclass :name name :args args)
+        (key-args (name args) serialize :ensure-class-using-metaclass)
         (register-last-class-definition name args)
         class))))
 

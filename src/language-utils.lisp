@@ -179,3 +179,12 @@ Accepts a timezone, but doesn't (yet?) reflect the timezone in the output."
   (remove-if (complement (lfix #'string= type))
              (cl-fad:list-directory directory-pathname)
              :key #'pathname-type))
+
+(defmacro key-args ((&rest key-args) &rest call)
+  "For cases where calls look like e.g. (fn a1 ... an :k1 k1 ... :kn kn).
+
+Now you can just (key-args (k1 k2 ... kn) a1 ... an) instead!"
+  (let ((canonicalized (mapappend #'list
+                                  (mapcar #'keywordify key-args)
+                                  key-args)))
+    (append call canonicalized)))

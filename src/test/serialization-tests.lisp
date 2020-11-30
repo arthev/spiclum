@@ -4,10 +4,10 @@
 
 (5am:in-suite :prevalence.unit.serialization)
 
-(defmacro serialization-tests (obj)
+(defmacro serialization-tests (obj &optional (comp 'equalp))
   `(progn
      (5am:is (not (eq ,obj (serialize-object ,obj))))
-     (5am:is (equalp ,obj (eval (serialize-object ,obj))))))
+     (5am:is (,comp ,obj (eval (serialize-object ,obj))))))
 
 (5am:test :list-serialization
   (let ((list '(a b c 59 2.4 "hello" #(1 2 3))))
@@ -49,8 +49,7 @@
   (let* ((*prevalence-system* (test-prevalence-system))
          (bottom (apply #'make-instance 'bottom
                         *sample-bottom-unoccupied-plist*)))
-    (5am:is (not (eq bottom (serialize-object bottom))))
-    (5am:is (eq bottom (eval (serialize-object bottom))))))
+    (serialization-tests bottom eq)))
 
 (5am:test :slot-makunbound-using-class-serialization
   (let* ((*prevalence-system* (test-prevalence-system))
@@ -62,11 +61,28 @@
                      (slot-by-name (find-class 'bottom) 'i-bottom))))
     (destructuring-bind (fn-name class object slotd) call
       (let ((serialized
-             (serialize :slot-makunbound-using-class
-                        :class class :object object :slotd slotd)))
+              (key-args (class object slotd) serialize :slot-makunbound-using-class)))
         (5am:is (not (eq call serialized)))
         (5am:is (eq fn-name (car serialized)))
         (5am:is (equal (cdr call) (mapcar #'eval (cdr serialized))))))))
+
+(5am:test :setf-slot-value-using-class-serialization
+  (let* ((*prevalence-system* (test-prevalence-system))
+         (bottom (apply #'make-instance 'bottom
+                        *sample-bottom-unoccupied-plist*))
+         (call `(setf (c2mop:slot-value-using-class
+                       ,(class-of bottom)
+                       ,bottom
+                       ,(slot-by-name (class-of bottom) 'nil-top))
+                      christmas-pudding)))
+    (destructuring-bind (setf (fn-name class instance slotd) new-value) call
+      (let ((serialized
+              (key-args (new-value class instance slotd) serialize :setf-slot-value-using-class)))
+        (5am:is (not (eq call serialized)))
+        (5am:is (eq 'setf (car serialized)))
+        (5am:is (eq fn-name (caadr serialized)))
+        ;; and now we must check each value for eq of some type...
+        ))))
 
 ;; setf-slot-value-using-class
 
