@@ -45,9 +45,28 @@
           do (setf (gethash key ht) value))
     (serialization-tests ht)))
 
-;; instance as lookup
+(5am:test :instance-as-lookup-serialization
+  (let* ((*prevalence-system* (test-prevalence-system))
+         (bottom (apply #'make-instance 'bottom
+                        *sample-bottom-unoccupied-plist*)))
+    (5am:is (not (eq bottom (serialize-object bottom))))
+    (5am:is (eq bottom (eval (serialize-object bottom))))))
 
-;; slot-makunbound-using-class
+(5am:test :slot-makunbound-using-class-serialization
+  (let* ((*prevalence-system* (test-prevalence-system))
+         (bottom (apply #'make-instance 'bottom
+                        *sample-bottom-unoccupied-plist*))
+         (call (list 'c2mop:slot-makunbound-using-class
+                     (find-class 'bottom)
+                     bottom
+                     (slot-by-name (find-class 'bottom) 'i-bottom))))
+    (destructuring-bind (fn-name class object slotd) call
+      (let ((serialized
+             (serialize :slot-makunbound-using-class
+                        :class class :object object :slotd slotd)))
+        (5am:is (not (eq call serialized)))
+        (5am:is (eq fn-name (car serialized)))
+        (5am:is (equal (cdr call) (mapcar #'eval (cdr serialized))))))))
 
 ;; setf-slot-value-using-class
 

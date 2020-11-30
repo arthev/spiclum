@@ -190,7 +190,8 @@ acceptable-persistent-slot-value-type-p."))
 
 (defmethod serialize :around (generic &key &allow-other-keys)
   (when *persisting-p*
-    (serialize-write (call-next-method))))
+    (prog1-let (form (call-next-method))
+      (serialize-write form))))
 
 (defmethod serialize ((generic (eql :slot-makunbound-using-class))
                       &key class object slotd)
