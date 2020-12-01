@@ -4,6 +4,8 @@
 
 (5am:in-suite :prevalence.unit.serialization)
 
+;;;; Utils
+
 (defmacro data-tests (obj &optional (comp '#'equalp))
   `(progn
      (5am:is (not (eq ,obj (serialize-object ,obj))))
@@ -52,7 +54,37 @@
       (and (call-equal (car original) (car serialized))
            (call-equal (cdr original) (cdr serialized)))))
 
-(defmacro call-tests () ())
+(defmacro call-tests (&key instance call destructuring-lambda generic)
+  (let* ((relevant-method
+           (find-if (lambda (specializers)
+                      (let ((generic-specializer (car specializers)))
+                        (and (typep generic-specializer
+                                    'c2mop:eql-specializer)
+                             (eq generic
+                                 (c2mop:eql-specializer-object
+                                  generic-specializer)))))
+                    (c2mop:generic-function-methods #'serialize)
+                    :key #'c2mop:method-specializers))
+         (relevant-lambda-list
+           (c2mop:method-lambda-list relevant-method))
+         (method-keyword-params
+           (cdr (member '&key relevant-lambda-list)))
+         (ignore
+           (set-difference
+            (flatten destructuring-lambda)
+            (append '(&optional &rest &body &key &aux &whole &environment)
+                    method-keyword-params))))
+    `(let* ((*prevalence-system* (test-prevalence-system))
+            (instance ,instance)
+            (call ,call))
+       (destructuring-bind ,destructuring-lambda call
+         (declare (ignore ,@ignore))
+         (let ((serialized (key-args ,method-keyword-params
+                                     serialize ,generic)))
+           (5am:is (call-equal call serialized)))))))
+
+
+;;;; Tests
 
 (5am:test :list-serialization
   (let ((list '(a b c 59 2.4 "hello" #(1 2 3))))
@@ -108,47 +140,37 @@
     (data-tests bottom #'eq)))
 
 (5am:test :slot-makunbound-using-class-serialization
-  (let* ((*prevalence-system* (test-prevalence-system))
-         (bottom (apply #'make-instance 'bottom
-                        *sample-bottom-unoccupied-plist*))
-         (call (list 'c2mop:slot-makunbound-using-class
-                     (find-class 'bottom)
-                     bottom
-                     (slot-by-name (find-class 'bottom) 'i-bottom))))
-    (destructuring-bind (fn-name class object slotd) call
-      (declare (ignore fn-name))
-      (let ((serialized
-              (key-args (class object slotd) serialize :slot-makunbound-using-class)))
-        (5am:is (call-equal call serialized))))))
+  (call-tests :generic :slot-makunbound-using-class
+              :instance (apply #'make-instance 'bottom
+                               *sample-bottom-unoccupied-plist*)
+              :call (list 'c2mop:slot-makunbound-using-class
+                          (find-class 'bottom)
+                          instance
+                          (slot-by-name (find-class 'bottom) 'i-bottom))
+              :destructuring-lambda (fn class object slotd)))
 
 (5am:test :setf-slot-value-using-class-serialization
-  (let* ((*prevalence-system* (test-prevalence-system))
-         (bottom (apply #'make-instance 'bottom
-                        *sample-bottom-unoccupied-plist*))
-         (call `(setf (c2mop:slot-value-using-class
-                       ,(class-of bottom)
-                       ,bottom
-                       ,(slot-by-name (class-of bottom) 'nil-top))
-                      christmas-pudding)))
-    (destructuring-bind (setf (fn-name class instance slotd) new-value) call
-      (declare (ignore setf fn-name))
-      (let ((serialized (key-args (new-value class instance slotd)
-                                  serialize :setf-slot-value-using-class)))
-        (5am:is (call-equal call serialized))))))
+  (call-tests :generic :setf-slot-value-using-class
+              :instance (apply #'make-instance 'bottom
+                               *sample-bottom-unoccupied-plist*)
+              :call (list 'setf
+                          (list 'c2mop:slot-value-using-class
+                                (class-of instance)
+                                instance
+                                (slot-by-name (class-of instance) 'nil-top))
+                          'christmas-pudding)
+              :destructuring-lambda (setf (fn class instance slotd) new-value)))
 
 (5am:test :change-class-serialization
-  (let* ((*prevalence-system* (test-prevalence-system))
-         (instance (make-instance 'left :pu-left "i-pu-left"
-                                        :middle 'tja
-                                        :i-top 19.0d0))
-         (call `(change-class ,instance
-                              ,(find-class 'right)
-                              :pu-right "i-pu-right")))
-    (destructuring-bind (fn-name instance new-class &rest initargs) call
-      (declare (ignore fn-name))
-      (let ((serialized (key-args (instance new-class initargs)
-                                  serialize :change-class)))
-        (5am:is (call-equal call serialized))))))
+  (call-tests :generic :change-class
+              :instance (make-instance 'left :pu-left "i-pu-left"
+                                             :middle 'tja
+                                             :i-top 19.0d0)
+              :call (list 'change-class
+                          instance
+                          (find-class 'right)
+                          :pu-right "i-pu-right")
+              :destructuring-lambda (fn instance new-class &rest initargs)))
 
 ;; ensure-class-using-metaclass
 
