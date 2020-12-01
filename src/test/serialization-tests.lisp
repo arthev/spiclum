@@ -172,6 +172,13 @@
                           :pu-right "i-pu-right")
               :destructuring-lambda (fn instance new-class &rest initargs)))
 
-;; ensure-class-using-metaclass
+(5am:test :reinitialize-instance-serialization
+  (call-tests :generic :reinitialize-instance
+              :instance (apply #'make-instance 'bottom
+                               *sample-bottom-unoccupied-plist*)
+              :call (list 'reinitialize-instance
+                          instance
+                          :i-bottom 'yoodledy-moo)
+              :destructuring-lambda (fn instance &rest initargs)))
 
-;; reinitialize-instance
+;; ensure-class-using-metaclass
