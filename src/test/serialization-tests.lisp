@@ -136,8 +136,20 @@
                                   serialize :setf-slot-value-using-class)))
         (5am:is (call-equal call serialized))))))
 
-;; ensure-class-using-metaclass
+(5am:test :change-class-serialization
+  (let* ((*prevalence-system* (test-prevalence-system))
+         (instance (make-instance 'left :pu-left "i-pu-left"
+                                        :middle 'tja
+                                        :i-top 19.0d0))
+         (call `(change-class ,instance
+                              ,(find-class 'right)
+                              :pu-right "i-pu-right")))
+    (destructuring-bind (fn-name instance new-class &rest initargs) call
+      (declare (ignore fn-name))
+      (let ((serialized (key-args (instance new-class initargs)
+                                  serialize :change-class)))
+        (5am:is (call-equal call serialized))))))
 
-;; change-class
+;; ensure-class-using-metaclass
 
 ;; reinitialize-instance
