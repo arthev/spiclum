@@ -213,4 +213,6 @@
       (5am:is (not (eq call serialized)))
       (5am:is (eq (car call) (car serialized)))
       (5am:is (eq (cadr call) (eval (cadr serialized))))
-      (5am:is (e-c-u-m-s-compare (caddr call) (eval (caddr serialized)))))))
+      (5am:is (e-c-u-m-s-compare (caddr call)
+                                 (eval (cons 'list
+                                             (cddr serialized))))))))

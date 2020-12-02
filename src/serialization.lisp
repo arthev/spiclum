@@ -41,8 +41,9 @@
 
 (defmethod force ((tree list))
   ;; TODO: Handle circularity
-  (setf (car tree) (force (car tree))
-        (cdr tree) (force (cdr tree)))
+  (unless (null tree)
+    (setf (car tree) (force (car tree))
+          (cdr tree) (force (cdr tree))))
   tree)
 
 (defmethod force ((array array))
@@ -236,7 +237,7 @@ acceptable-persistent-slot-value-type-p."))
          (slot-args
            `(list ,@(mapcar #'serialize-slot-spec
                             (getf args :direct-slots)))))
-    `(list ,@(replace-property :direct-slots slot-args most-args))))
+    (replace-property :direct-slots slot-args most-args)))
 
 (defun serialize-slot-spec (slot-spec)
   (apply #'append '(list)
@@ -254,7 +255,7 @@ acceptable-persistent-slot-value-type-p."))
   (let ((args (filter-e-c-u-m-args args)))
     `(c2mop:ensure-class
       ,(serialize-object name)
-      ,(serialize-e-c-u-m-args args))))
+      ,@(serialize-e-c-u-m-args args))))
 
 (defmethod serialize ((generic (eql :change-class))
                       &key instance new-class initargs)

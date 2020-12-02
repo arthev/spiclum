@@ -18,14 +18,16 @@ Writes the set of class definitions for prevalence-classes,
 and the set of instances of prevalence-object."
   (update-prevalence-system-for-timestamp *prevalence-system*
                                           (ANSI-time))
+  (initialize-prevalence-system-files *prevalence-system*)
   (let ((*saving-world-p* t))
     (maphash
      (lambda (name last-definition)
        (declare (ignore name))
-       (apply #'serialize :ensure-class-using-metaclass last-definition))
+       (destructuring-bind (name &rest args) last-definition
+         (key-args (name args) serialize :ensure-class-using-metaclass)))
      (class-definition-store *prevalence-system*))
-    (dolist (object (find-all (find-class 'prevalence-object)))
-      (serialize :make-instance :object object))))
+    (dolist (instance (find-all (find-class 'prevalence-object)))
+      (serialize :make-instance :instance instance))))
 
 (defun load-world (directory name)
   ;; e.g. directory "home/arthur/spiclum-test" name "spiclum-test"
