@@ -232,12 +232,11 @@ acceptable-persistent-slot-value-type-p."))
 
 (defun serialize-e-c-u-m-args (args)
   (let* ((most-args (mapcar #'serialize-object
-                            (remove-properties '(:direct-slots) args)))
+                            (replace-property :direct-slots nil args)))
          (slot-args
-           `(:direct-slots
-             (list ,@(mapcar #'serialize-slot-spec
-                             (getf args :direct-slots))))))
-    (list* slot-args most-args)))
+           `(list ,@(mapcar #'serialize-slot-spec
+                            (getf args :direct-slots)))))
+    `(list ,@(replace-property :direct-slots slot-args most-args))))
 
 (defun serialize-slot-spec (slot-spec)
   (apply #'append '(list)
@@ -255,7 +254,7 @@ acceptable-persistent-slot-value-type-p."))
   (let ((args (filter-e-c-u-m-args args)))
     `(c2mop:ensure-class
       ,(serialize-object name)
-      ,@(serialize-e-c-u-m-args args))))
+      ,(serialize-e-c-u-m-args args))))
 
 (defmethod serialize ((generic (eql :change-class))
                       &key instance new-class initargs)

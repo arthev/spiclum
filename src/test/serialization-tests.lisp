@@ -181,4 +181,36 @@
                           :i-bottom 'yoodledy-moo)
               :destructuring-lambda (fn instance &rest initargs)))
 
-;; ensure-class-using-metaclass
+(5am:test :ensure-class-using-metaclass-serialization
+  (labels ((e-c-u-m-s-compare (original serialized)
+             (cond ((functionp original)
+                    (equalp (funcall original) (funcall serialized)))
+                   ((atom original)
+                    (equalp original serialized))
+                   (t
+                    (and (e-c-u-m-s-compare (car original) (car serialized))
+                         (e-c-u-m-s-compare (cdr original) (cdr serialized)))))))
+    (let* ((*prevalence-system* (test-prevalence-system))
+           (class-def '(defpclass bottom (left right)
+                        ((i-bottom
+                          :initarg :i-bottom
+                          :key :index
+                          :equality #'equalp
+                          :accessor i-bottom)
+                         (some-slot
+                          :initarg :some-slot
+                          :accessor some-slot
+                          :initform 42))))
+           (call (progn
+                   (eval class-def)
+                   (list 'c2mop:ensure-class
+                         'bottom
+                         (filter-e-c-u-m-args
+                          (cdr (last-class-definition 'bottom))))))
+           (serialized (destructuring-bind (fn name args) call
+                         (declare (ignore fn))
+                         (key-args (name args) serialize :ensure-class-using-metaclass))))
+      (5am:is (not (eq call serialized)))
+      (5am:is (eq (car call) (car serialized)))
+      (5am:is (eq (cadr call) (eval (cadr serialized))))
+      (5am:is (e-c-u-m-s-compare (caddr call) (eval (caddr serialized)))))))
