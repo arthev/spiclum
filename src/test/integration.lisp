@@ -5,7 +5,8 @@
 (5am:test :save/load-world
   (let* ((directory  "/home/arthur/spiclum-test")
          (name "spiclum-test")
-         (path (make-pathname :directory directory :name name)))
+         (path (make-pathname :directory directory :name name))
+         (real-prevalence-system *prevalence-system*))
     (flet ((list-files (type)
              (list-directory-for-type
               (cl-fad:pathname-directory-pathname path)
@@ -48,4 +49,5 @@
           (5am:is (equalp (b instance1) (b new-instance1)))
           (5am:is (equalp (b instance2) (b new-instance2)))
           (5am:is (eq instance1 (a instance2)))
-          (5am:is (eq new-instance1 (a new-instance2))))))))
+          (5am:is (eq new-instance1 (a new-instance2))))))
+    (setf *prevalence-system* real-prevalence-system)))
