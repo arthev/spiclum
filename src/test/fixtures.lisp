@@ -80,6 +80,9 @@
     (flet ((insert-obj (obj)
              (pushnew obj (gethash (i-bottom obj) (gethash 'i-bottom (gethash 'bottom hash-store))))
              (pushnew obj (gethash (i-top    obj) (gethash 'i-top    (gethash 'top    hash-store))))
+             (pushnew obj (gethash (reverse-class-lookup obj)
+                                                  (gethash 'reverse-class-lookup
+                                                                     (gethash 'prevalence-object hash-store))))
              (setf (gethash (cu-top obj)   (gethash 'cu-top   (gethash (type-of obj)      hash-store))) obj)
              (setf (gethash (pu-left obj)  (gethash 'pu-left  (gethash 'left              hash-store))) obj)
              (setf (gethash (pu-right obj) (gethash 'pu-right (gethash 'right             hash-store))) obj)
@@ -100,6 +103,8 @@
       (set-hash 'i-top    'top               #'equalp)
       (set-hash 'cu-top   'bottom            #'eql)
       (set-hash 'uuid     'prevalence-object #'eql)
+      (set-hash 'reverse-class-lookup
+                          'prevalence-object #'eq)
       (insert-obj sample-bottom-1)
       (insert-obj sample-bottom-2)
       (values hash-store sample-bottom-1 sample-bottom-2))))

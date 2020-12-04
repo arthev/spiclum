@@ -73,6 +73,14 @@ don't support that for SBCL."
       (values (slot-value instance slot-name) t)
       (values nil nil)))
 
+(defun all-subclasses (class)
+  (labels ((internal (class)
+             (append (mklist class)
+                     (lwhen (subclasses (c2mop:class-direct-subclasses class))
+                       (mapappend #'all-subclasses subclasses)))))
+    (remove-duplicates (internal class) :test #'eq)))
+
+
 (defun find-slot-defining-class (class slotd)
   "Find the most specific slot-defining-class by
    searching through CLASS's precedence list until

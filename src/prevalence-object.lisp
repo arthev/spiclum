@@ -6,7 +6,11 @@
     :initarg :uuid
     :reader uuid
     :key :precedence-unique
-    :equality #'eql))
+    :equality #'eql)
+   (reverse-class-lookup
+    :accessor reverse-class-lookup
+    :key :index
+    :equality #'eq))
   (:metaclass prevalence-class)
   (:documentation "Class for prevalent objects to inherit, to specialize on
                    reinitialize-instance etc."))
@@ -81,3 +85,12 @@
             :undo (prevalence-remove-instance instance)))
         (key-args (instance new-class initargs) serialize :change-class)
         instance))))
+
+;;;; 1. Methods to ensure coherent REVERSE-CLASS-LOOKUP
+
+(defmethod initialize-instance :after ((instance prevalence-object) &key &allow-other-keys)
+  (setf (reverse-class-lookup instance) (class-of instance)))
+
+(defmethod update-instance-for-different-class :after (previous (current prevalence-object) &rest initargs)
+  (declare (ignore initargs))
+  (setf (reverse-class-lookup current) (class-of current)))
