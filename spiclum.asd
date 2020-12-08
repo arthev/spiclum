@@ -22,4 +22,5 @@
                (:file "src/test/fixtures")
                (:file "src/test/mop-methods")
                (:file "src/test/serialization-tests")
+               (:file "src/test/query-tests")
                (:file "src/test/integration")))

@@ -53,7 +53,12 @@
   (let ((best nil)
         (score nil))
     (loop for (slotd comp-value) in filters
-          for set = (mklist (prevalence-lookup-class-slot class slotd comp-value))
+          ;; This probably breaks if we ever try to do something
+          ;; clever/efficient for class-unique keys
+          for set = (mklist (prevalence-lookup-class-slot
+                             (find-slot-defining-class class slotd)
+                             slotd
+                             comp-value))
           for filtered-set = (if strict
                                  (remove-if (complement (rfix #'eq class))
                                             set
@@ -84,12 +89,15 @@
 
 (defun satisfies-filter-p (instance where class)
   (labels ((%satisfies-filter-p (form)
-             (if (compound-form-p form)
-                 (funcall (cond ((and-form-p form) #'every)
-                                ((or-form-p form) #'some)
-                                ((not-form-p form) #'notany))
-                          #'%satisfies-filter-p (compound-form-children form))
-                 (satisfies-simple-filter-p instance form class))))
+             (cond ((null form)
+                    t)
+                   ((compound-form-p form)
+                    (funcall (cond ((and-form-p form) #'every)
+                                   ((or-form-p form) #'some)
+                                   ((not-form-p form) #'notany))
+                             #'%satisfies-filter-p (compound-form-children form)))
+                   (t
+                    (satisfies-simple-filter-p instance form class)))))
     (%satisfies-filter-p where)))
 
 (defun call-query (&key select class strict where)
@@ -99,22 +107,30 @@
         (remove-if (complement satisfies-p) initial-set)
         (find-if satisfies-p initial-set))))
 
-(defun well-formed-query-where-p (form)
-  (if (compound-form-p form)
-      (and (if (not-form-p form)
-               (= 1 (length (compound-form-children form)))
-               t)
-           (every #'well-formed-query-where-p (compound-form-children form)))
-      (and (= 2 (length form))
-           (symbolp (car form)))))
+(defun well-formed-query-where-p (form &key recursive-p)
+  (cond ((and (not recursive-p)
+              (null form))
+         t)
+        ((compound-form-p form)
+         (and (if (not-form-p form)
+                  (= 1 (length (compound-form-children form)))
+                  t)
+              (every (rfix #'well-formed-query-where-p :recursive-p t)
+                     (compound-form-children form))))
+        ((and (= 2 (length form))
+              (symbolp (car form)))
+         t)))
 
 (defun canonicalize-query-where (form)
-  (if (compound-form-p form)
-      `(list ,(form-compound form)
-             ,@(mapcar #'canonicalize-query-where
-                       (compound-form-children form)))
-      (destructuring-bind (slot-symbol comp-form) form
-        `(list ',slot-symbol ,comp-form))))
+  (cond ((null form)
+         nil)
+        ((compound-form-p form)
+         `(list ,(form-compound form)
+                ,@(mapcar #'canonicalize-query-where
+                          (compound-form-children form))))
+        (t
+         (destructuring-bind (slot-symbol comp-form) form
+           `(list ',slot-symbol ,comp-form)))))
 
 (defmacro query (&key (select :all) class (strict nil) where)
   (assert (and class (symbolp class)))
