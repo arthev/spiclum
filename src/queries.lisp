@@ -1,8 +1,5 @@
 (in-package :spiclum)
 
-;; Need to support... select and delete.
-;; Let's keep it simple and only design for select for now.
-
 ;; (query :select :all
 ;;        :class left
 ;;        :strict t
