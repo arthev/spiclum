@@ -1,0 +1,18 @@
+The object-store is responsible for ensuring consistency and signalling as
+appropriate. To that effect, many object-store operations operate in a
+'look before you leap' manner.
+
+The object-store makes locks available for use by its manipulators. Hence,
+locking behviour is left to the MOP/interface layer, rather than having
+the object-store do any locking on its own. Especially relevant since
+locks might span several different object-store actions.
+
+The methods for c2mop:ensure-class-using-metaclass specializing on
+prevalence-class short-circuit in the case that *prevalence-system*
+is unbound. This is for bootstrapping purposes, so we can load the system.
+Other methods don't short-circuit, because we _want_ error messages to
+tell us the system is misconfigured - doing operations on prevalence-objects
+without an active prevalence-system.
+
+The different MOP actions make use of as-transaction, since that effectively
+communicates the intended semantics, compared with imperative code with flags etc. There's an issue, though: suppose we're inserting for a set of slots, and get half-way through the set, but then there's an interrupt? The action hasn't completed, so as-transaction won't trigger its reverse. Maybe the code for inserting itself needs some atomicity handling. This is related to the note in the README about interrupts not being supported, of course.

@@ -2,7 +2,13 @@
 
 (defclass prevalence-class (standard-class)
   ()
-  (:documentation "Meta-class for persistent objects using prevalence."))
+  (:documentation "Meta-class for persistent objects using prevalence.
+
+Prevalence-class's slot-specifiers accept :KEY and :EQUALITY args.
+
+:KEY must be of type KEYABLE-SLOT-KEY. NIL means the slot in question is *not* used as an index. :UNIQUE means it's a unique key (for all subclasses that share the slot definition). :INDEX means the slot is used for indexing without any uniqueness restraint. :CLASS-UNIQUE means the slot is a unique key, but the uniqueness restraint applies at the level of each direct class, hence different subclasses can each have an instance wih a particular unique value for the slot.
+
+:EQUALITY must be one of the hash-table test functions."))
 
 ;;;; -1. Helpers
 
@@ -61,7 +67,7 @@
 (defgeneric acceptable-persistent-slot-value-type-p (value)
   (:documentation "Is VALUE an acceptable slot-value?
 
-Generally, that depends on if we can serialize VALUE."))
+The default method checks for an applicable SERIALIZE-OBJECT method."))
 
 (defmethod acceptable-persistent-slot-value-type-p (value)
   (c2mop:compute-applicable-methods-using-classes

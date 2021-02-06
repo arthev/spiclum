@@ -12,8 +12,10 @@
     :key :index
     :equality #'eq))
   (:metaclass prevalence-class)
-  (:documentation "Class for prevalent objects to inherit, to specialize on
-                   reinitialize-instance etc."))
+  (:documentation "Superclass for all prevalence-objects.
+
+Necessary since some of he intercessory methods don't specialize on metaclass.
+Further, it defines some slots used by the object-store."))
 
 (defmethod serialize-object ((instance prevalence-object))
   (if *saving-world-p*

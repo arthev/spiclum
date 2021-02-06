@@ -32,6 +32,11 @@
   ())
 
 (defmethod initialize-instance :before ((slot keyable-slot) &key key allocation &allow-other-keys)
-  "Sanity checks KEY."
+  "Sanity checks KEY.
+
+This single :before method on INITIALIZE-INSTANCE is presumed sufficient,
+since since http://mop.lisp.se/www.alu.org/mop/dictionary.html says
+portable programs must not define methods on shared-initialize or
+reinitialize-instance for slot definition metaobjects."
   (check-type key keyable-slot-key)
   (assert (not (and (eq :class allocation) key))))

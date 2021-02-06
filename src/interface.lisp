@@ -1,7 +1,10 @@
 (in-package :spiclum)
 
 (defmacro defpclass (class-name superclasses slot-specifiers &rest class-options)
-  "Programmer macro for defining prevalence classes."
+  "Programmer macro for defining prevalence classes.
+
+Handles the PREVALENCE-CLASS metaclass & the PREVALENCE-OBJECT superclass.
+See PREVALENCE-CLASS for documentation on slot-specifier options."
   (when (find :metaclass class-options :key #'car)
     (error "DEFPCLASS uses implicit metaclass PREVALENCE-CLASS,~%~
             but an explicit metaclass was provided for ~S" class-name))
@@ -22,7 +25,10 @@ to the deleted object."
     (prevalence-remove-instance obj)))
 
 (defun save-world (&key directory name)
-  "Save a new file as per *PREVALENCE-SYSTEM*'s STORAGE-PATH with time-of-call.
+  "Save a new world as per DIRECTORY and NAME.
+
+If DIRECTORY or NAME (or both) are nil, then read the values
+from *PREVALENCE-SYSTEM*'s STORAGE-PATH with time-of-call.
 
 Writes the set of class definitions for prevalence-classes,
 and the set of instances of prevalence-object."
@@ -48,6 +54,10 @@ and the set of instances of prevalence-object."
       (serialize :make-instance :instance instance))))
 
 (defun load-world (&key directory name)
+  "Loads a world/transaction log (or creates empty ones).
+
+Initializes the object-store/prevalence-system.
+DIRECTORY and NAME are required."
   ;; e.g. directory "home/arthur/spiclum-test" name "spiclum-test"
   (assert (and directory name))
   (setf *prevalence-system*

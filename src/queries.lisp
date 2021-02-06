@@ -8,6 +8,8 @@
 ;;                     (:or (pu-left (partial #'< -5 :? 5))
 ;;                          (middle  (partial #'<= -5 :? 5)))))
 
+;; Queries use :and, :or, and :not keywords to leave the non-keywords
+;; available as (weirdo) slot-names.
 
 (defun compound-form-p (form)
   (member (car form) '(:and :or :not)))
@@ -130,6 +132,27 @@
            `(list ',slot-symbol ,comp-form)))))
 
 (defmacro query (&key (select :all) class (strict nil) where)
+  "Macro interface/DSL for selecting objects from the object-store.
+
+SELECT must be either :all or :the. :all returns a list of all objects
+that match the selection criteria. :the returns the first matching object.
+
+CLASS must be the symbol which names the desired class.
+
+STRICT must be either nil or t. If t, we only query for direct members
+of the class in question. If nil, we query for members of all subclasses.
+
+WHERE specifies a filter:
+
+<where> ::= nil | <filter>
+<filter> ::= <simple-filter> | <compound-filter>
+<compound-filter> ::= (:and <multi-filter>) | (:or <multi-filter>) | (:not <filter>)
+<multi-filter> ::= <filter> | <filter> <multi-filter>
+<simple-filter> ::= (<slot-name> <comparison>)
+<comparison> ::= <comparison-value> | <comparison-function>
+<slot-name> ::= the symbol which names a slot of the relevant `class`
+<value> ::= a value tested for equality against the relevant slot-value, using the slot's equality function
+<comparison-function> ::= an arbitrary unary predicate"
   (assert (and class (symbolp class)))
   (assert (well-formed-query-where-p where))
   `(call-query :select ,select
