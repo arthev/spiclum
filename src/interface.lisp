@@ -21,11 +21,19 @@ to the deleted object."
   (with-recursive-locks (all-prevalence-slot-locks-for obj)
     (prevalence-remove-instance obj)))
 
-(defun save-world ()
+(defun save-world (&key directory name)
   "Save a new file as per *PREVALENCE-SYSTEM*'s STORAGE-PATH with time-of-call.
 
 Writes the set of class definitions for prevalence-classes,
 and the set of instances of prevalence-object."
+  (when (or directory name)
+    (with-accessors ((storage-path storage-path)) *prevalence-system*
+      (setf storage-path
+            (make-pathname :directory (or directory
+                                          (pathname-directory storage-path))
+                           :name (or name
+                                     (pathname-name storage-path))))
+      (ensure-directories-exist storage-path)))
   (update-prevalence-system-for-timestamp *prevalence-system*
                                           (ANSI-time))
   (initialize-prevalence-system-files *prevalence-system*)
@@ -39,8 +47,9 @@ and the set of instances of prevalence-object."
     (dolist (instance (find-all (find-class 'prevalence-object)))
       (serialize :make-instance :instance instance))))
 
-(defun load-world (directory name)
+(defun load-world (&key directory name)
   ;; e.g. directory "home/arthur/spiclum-test" name "spiclum-test"
+  (assert (and directory name))
   (setf *prevalence-system*
         (make-instance 'prevalence-system
                        :storage-path (make-pathname :directory directory

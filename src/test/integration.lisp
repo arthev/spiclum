@@ -14,7 +14,7 @@
       (ensure-directories-exist path)
       (mapc #'uiop:delete-file-if-exists
             (mapappend #'list-files (list *world-filename* *log-filename*)))
-      (load-world directory name)
+      (load-world :directory directory :name name)
       (5am:is-true (typep *prevalence-system* 'prevalence-system)
                    "*prevalence-system* not bound to a prevalence-system~
                   after loading (empty/non-existent) world")
@@ -40,7 +40,7 @@
         (save-world)
         (5am:is (= 2 (length (list-files *world-filename*))))
         (5am:is (= 2 (length (list-files *log-filename*))))
-        (load-world directory name)
+        (load-world :directory directory :name name)
         (let ((new-instance1 (find-by-uuid 1))
               (new-instance2 (find-by-uuid 2)))
           (5am:is (not (eq instance1 new-instance1)))
