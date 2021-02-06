@@ -42,7 +42,7 @@
         for slotd = (slot-by-name class slot-name)
         when (and (eq (key slotd) (if (eq select :all)
                                       :index
-                                      :precedence-unique))
+                                      :unique))
                   (not (functionp comp-value)))
           collect (list slotd comp-value)))
 

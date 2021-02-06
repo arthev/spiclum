@@ -21,7 +21,7 @@
       (defpclass some-class ()
         ((a :initarg :a
             :accessor a
-            :key :precedence-unique
+            :key :unique
             :equality #'equalp)
          (b :initarg :b
             :accessor b

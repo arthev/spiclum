@@ -166,7 +166,7 @@
     ((:index nil) t)
     (:class-unique
      (not (prevalence-lookup-class-slot class slotd value)))
-    (:precedence-unique
+    (:unique
      (not (prevalence-lookup-class-slot
            (find-slot-defining-class class slotd) slotd value)))))
 
@@ -193,7 +193,7 @@
                (setf (prevalence-lookup-class-slot using-class slotd value) object))))
     (ccase (key slotd)
       (:class-unique (unique-insert class))
-      (:precedence-unique (unique-insert (find-slot-defining-class class slotd)))
+      (:unique (unique-insert (find-slot-defining-class class slotd)))
       (:index
        (let ((slot-defining-class (find-slot-defining-class class slotd)))
          (pushnew object (prevalence-lookup-class-slot slot-defining-class slotd value))))
@@ -239,7 +239,7 @@
       ((nil) :do-nothing)
       (:class-unique
        (unique-removal class))
-      (:precedence-unique
+      (:unique
        (unique-removal (find-slot-defining-class class slotd)))
       (:index
        (let ((slot-defining-class (find-slot-defining-class class slotd)))
@@ -292,7 +292,7 @@
                                       (class-name class)
                                       (c2mop:slot-definition-name slotd)))
                       (:index (lock-for-slot-defining-class slotd))
-                      (:precedence-unique (lock-for-slot-defining-class slotd))))))
+                      (:unique (lock-for-slot-defining-class slotd))))))
 
 (defun all-prevalence-slot-locks-for (obj)
   (let ((class (if (c2mop:classp obj) obj (class-of obj))))

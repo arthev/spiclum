@@ -219,7 +219,7 @@
     (5am:is (zerop (hash-table-count (class-definition-store *prevalence-system*))))
     (eval '(defpclass class-definition-test-class ()
             ((a :initarg :a :key :index :equality #'equalp)
-             (b :initarg :b :key :precedence-unique :equality #'equalp)
+             (b :initarg :b :key :unique :equality #'equalp)
              (c :initarg :c :key :class-unique :equality #'equalp))))
     (let* ((class (find-class 'class-definition-test-class))
            (instance (make-instance 'class-definition-test-class
@@ -227,7 +227,7 @@
            (a-slot (slot-by-name class 'a)))
       (check-lookup-finds-object instance)
       (eval '(defpclass class-definition-test-class ()
-              ((b :initarg :b :key :precedence-unique :equality #'equalp)
+              ((b :initarg :b :key :unique :equality #'equalp)
                (c :initarg :c :key :class-unique :equality #'equalp)
                (oof :initarg :oof :key :index :equality #'equalp))))
       (check-lookup-finds-object instance)
@@ -255,7 +255,7 @@
           (progn
             (eval '(defpclass class-definition-test-class ()
                     ((a :initarg :a
-                        :key :precedence-unique
+                        :key :unique
                         :equality #'eql))))
             (5am:fail "Expected non-unique-unique keys error, but no error happened."))
         (non-unique-unique-keys ()
@@ -278,7 +278,7 @@
     (eval '(defpclass a-class ()
             ((a :initarg :a :key :index :equality #'equalp))))
     (eval '(defpclass b-class (a-class)
-            ((b :initarg :b :key :precedence-unique :equality #'equalp))))
+            ((b :initarg :b :key :unique :equality #'equalp))))
     (let ((original-a-definition (gethash 'a-class (class-definition-store *prevalence-system*)))
           (i1 (make-instance 'b-class :a 5 :b 2))
           (i2 (make-instance 'b-class :a 5 :b 8)))
@@ -295,7 +295,7 @@
       (handler-case
           (progn
             (eval '(defpclass a-class ()
-                    ((a :initarg :a :key :precedence-unique :equality #'equalp))))
+                    ((a :initarg :a :key :unique :equality #'equalp))))
             (5am:fail "Expected non-unique-unique keys error, but no error happened."))
         (non-unique-unique-keys ()
           (5am:pass "class redefinition resulted in expected error.")))
@@ -313,7 +313,7 @@
       (check-lookup-finds-object i2)
       (setf (slot-value i1 'a) 12)
       (eval '(defpclass a-class ()
-              ((a :initarg :a :key :precedence-unique :equality #'equalp))))
+              ((a :initarg :a :key :unique :equality #'equalp))))
       (check-lookup-finds-object i1)
       (check-lookup-finds-object i2))))
 

@@ -5,7 +5,7 @@
     :initform (generate-uuid-for-object-store)
     :initarg :uuid
     :reader uuid
-    :key :precedence-unique
+    :key :unique
     :equality #'eql)
    (reverse-class-lookup
     :accessor reverse-class-lookup

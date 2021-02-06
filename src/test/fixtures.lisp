@@ -14,7 +14,7 @@
 (defpclass top ()
   ((pu-top
     :initarg :pu-top
-    :key :precedence-unique
+    :key :unique
     :equality #'equal
     :accessor pu-top)
    (i-top
@@ -33,23 +33,23 @@
 (defpclass left (top)
   ((pu-left
     :initarg :pu-left
-    :key :precedence-unique
+    :key :unique
     :equality #'equal
     :accessor pu-left)
    (middle
     :initarg :middle
-    :key :precedence-unique
+    :key :unique
     :accessor middle)))
 
 (defpclass right (top)
   ((pu-right
     :initarg :pu-right
-    :key :precedence-unique
+    :key :unique
     :equality #'equal
     :accessor pu-right)
    (middle
     :initarg :middle
-    :key :precedence-unique
+    :key :unique
     :accessor middle)))
 
 (defpclass bottom (left right)
@@ -130,7 +130,7 @@
 (defun check-lookup-finds-object-slotd-value-p (obj slotd value)
   (let ((using-class
           (ccase (key slotd)
-            ((:index :precedence-unique)
+            ((:index :unique)
              (find-slot-defining-class (class-of obj) slotd))
             (:class-unique
              (class-of obj)))))

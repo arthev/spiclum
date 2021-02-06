@@ -18,7 +18,7 @@
     Used for indexing/keying by the prevalence system.")))
 
 (defun %member-of-legal-keyable-slot-key-values (x)
-  (member x '(nil :precedence-unique :class-unique :index)))
+  (member x '(nil :unique :class-unique :index)))
 
 (deftype keyable-slot-key ()
   '(satisfies %member-of-legal-keyable-slot-key-values))
