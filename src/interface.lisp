@@ -11,6 +11,16 @@
      ,@class-options
      (:metaclass prevalence-class)))
 
+(defun delete-object (obj)
+  "Deletes OBJ by removing it from the object-store.
+
+Note that a correct deletion requires the application
+to ensure that no prevalence-object holds a reference
+to the deleted object."
+  (check-type obj prevalence-object)
+  (with-recursive-locks (all-prevalence-slot-locks-for obj)
+    (prevalence-remove-instance obj)))
+
 (defun save-world ()
   "Save a new file as per *PREVALENCE-SYSTEM*'s STORAGE-PATH with time-of-call.
 
