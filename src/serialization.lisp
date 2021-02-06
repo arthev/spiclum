@@ -277,4 +277,5 @@ acceptable-persistent-slot-value-type-p."))
                          :direction :output
                          :if-exists :append
                          :if-does-not-exist :create)
-      (format out "~S~%" form))))
+      (let ((*package* (find-package :spiclum)))
+        (format out "~S~%" form)))))
