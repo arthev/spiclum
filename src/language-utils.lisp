@@ -1,5 +1,95 @@
 (in-package :spiclum)
 
+;;;; -1. assorted lisp utils
+
+
+(defmacro prog1-let ((var form) &body body)
+  `(let ((,var ,form))
+     (prog1 ,var ,@body)))
+
+(defun hash-keys (ht)
+  "Returns a list of the keys of HT."
+  (loop for key being the hash-keys of ht collect key))
+
+(defun mklist (obj)
+  (if (listp obj) obj (list obj)))
+
+(defmacro lwhen ((var pred) &body body)
+  "let-when. Bind VAR to val of PRED within body."
+  `(let ((,var ,pred))
+     (when ,var
+       ,@body)))
+
+(defun mapappend (fn &rest seqs)
+  (apply #'append (apply #'mapcar fn seqs)))
+
+(defun rfix (fn &rest args)
+  "Do a partial function application,
+   by fixing the rightmost args as ARGS."
+  (lambda (&rest more-args)
+    (apply fn (append more-args args))))
+
+(defun lfix (fn &rest args)
+  "Do a partial function application,
+   by fixing the leftmost args as ARGS."
+  (lambda (&rest more-args)
+    (apply fn (append args more-args))))
+
+(defun keywordify (arg)
+  (intern (ctypecase arg
+            (string arg)
+            (symbol (symbol-name arg)))
+          :keyword))
+
+(defun ignore-args (fn)
+  (lambda (&rest args)
+    (declare (ignore args))
+    (funcall fn)))
+
+(defmacro lif ((var pred) consequent alternative)
+  "let-if. Bind VAR to the value of PRED within body."
+  `(let ((,var ,pred))
+     (if ,var
+         ,consequent
+         ,alternative)))
+
+(defmacro orf (location value)
+  ;; This should be implemented with get-setf-expansion.
+  ;; See: http://clhs.lisp.se/Body/f_get_se.htm
+  ;; and http://clhs.lisp.se/Body/05_aab.htm
+  `(or ,location
+       (setf ,location ,value)))
+
+(defun mklist-of-lists (list)
+  (if (listp (car list))
+      list
+      (list list)))
+
+(defun replace-property (property value plist)
+  (loop for (prop val) on plist by #'cddr
+        if (eq prop property)
+          collect property and collect value
+        else
+          collect prop and collect val))
+
+(defun remove-properties (properties plist)
+  (loop for (prop val) on plist by #'cddr
+        unless (find prop properties)
+          collect prop and collect val))
+
+(define-modify-macro prependf (head)
+  (lambda (tail head)
+    (append head tail))
+  "See https://stackoverflow.com/questions/17908564/what-is-to-append-as-push-is-to-cons-in-lisp")
+
+(defun flatten (tree)
+  (if (atom tree)
+      (mklist tree)
+      (append (flatten (car tree)) (flatten (cdr tree)))))
+
+(defun singlep (obj)
+  (and (consp obj) (not (cdr obj))))
+
 ;;;; 0. :bordeaux-threads utils
 
 (defun lock-name (lock)
@@ -27,6 +117,21 @@ don't support that for SBCL."
         (call-with-recursive-locks (cdr locks) body))))
 
 ;;;; 1. CLOS/MOP utils
+
+(defun safe-slot-value (obj slot)
+  (handler-case (slot-value obj slot)
+    (unbound-slot (c)
+      (declare (ignore c))
+      nil)))
+
+(defun slot-values (obj)
+  (mapcar (lfix #'safe-slot-value obj)
+          (slot-names obj)))
+
+(defun slot-names (obj)
+  "Returns a list of the names of the slots of OBJ."
+  (mapcar #'closer-mop:slot-definition-name
+          (closer-mop:class-slots (class-of obj))))
 
 (defmacro do-bound-slots ((slot-var instance
                            &key

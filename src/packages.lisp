@@ -1,6 +1,5 @@
 (defpackage :spiclum
-  (:use :cl
-        :cl-arthur)
+  (:use :cl)
   (:export ;; basics
            :defpclass
            :delete-object
