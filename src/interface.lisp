@@ -51,7 +51,8 @@ and the set of instances of prevalence-object."
          (key-args (name args) serialize :ensure-class-using-metaclass)))
      (class-definition-store *prevalence-system*))
     (dolist (instance (find-all (find-class 'prevalence-object)))
-      (serialize :make-instance :instance instance))))
+      (serialize :make-instance :instance instance)))
+  :ok)
 
 (defun load-world (&key directory name)
   "Loads a world/transaction log (or creates empty ones).
