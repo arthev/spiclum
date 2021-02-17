@@ -5,6 +5,7 @@
            :delete-object
            :prevalence-class
            :prevalence-object
+           :multi-setf
 
            ;; queries
            :call-query

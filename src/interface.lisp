@@ -14,6 +14,46 @@ See PREVALENCE-CLASS for documentation on slot-specifier options."
      ,@class-options
      (:metaclass prevalence-class)))
 
+(defmacro multi-setf (&rest pairs)
+  (assert (evenp (length pairs)) (pairs) "setf (and multi-setf) operates on pairs, but PAIRS was odd length")
+  ;; TODO: Extract locks
+  (let* ((return-var (gensym "return"))
+         (digested-pairs
+           (loop for (place values) on pairs by #'cddr
+                 collect (list
+                          (gensym)
+                          :setf-expansion (multiple-value-list
+                                           (get-setf-expansion place))
+                          :values-form values)))
+         (actions
+           (mapcar
+            (lambda (digested-pair)
+              (destructuring-bind (gensym
+                                   &key setf-expansion values-form)
+                  digested-pair
+                (destructuring-bind (vars vals store-vars
+                                     writer-form reader-form)
+                    setf-expansion
+                  `(:do
+                    (let* ,(mapcar #'list vars vals)
+                      (setf ,gensym (multiple-values-list ,reader-form))
+                      (setf ,return-var (multiple-values-list ,values-form))
+                      (multiple-value-bind ,store-vars
+                          (values-list ,return-var)
+                        ,writer-form))
+                    :undo
+                    (let* ,(mapcar #'list vars vals)
+                      (multiple-value-bind ,store-vars (values-list ,gensym)
+                        ,writer-form))))))
+            digested-pairs)))
+    `(let (;; create some gensym bindings
+           ,@(mapcar #'car digested-pairs) ,return-var)
+       (as-transaction
+           (,@actions)
+         ;; We serialize through letting the individual setfs serialize.
+         ;; This is transactive modulo interrupts like the lisp dying.
+         (values-list ,return-var)))))
+
 (defun delete-object (obj)
   "Deletes OBJ by removing it from the object-store.
 
