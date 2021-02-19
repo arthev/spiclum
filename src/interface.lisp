@@ -14,9 +14,46 @@ See PREVALENCE-CLASS for documentation on slot-specifier options."
      ,@class-options
      (:metaclass prevalence-class)))
 
+(defun standard-writer-method-for-obj-p (name obj)
+  "Return the most specific standard-writer-method, if any.
+
+NAME names a function (potentially). E.g. '+ or '(setf some-slot).
+OBJ is an arbitrary object (for which NAME might be a writer-method)."
+  (when (and (fboundp name)
+             (typep (fdefinition name) 'c2mop:generic-function))
+    (find-if (rfix #'typep 'c2mop:standard-writer-method)
+             (c2mop::compute-applicable-methods
+              (fdefinition name)
+              (list t obj)))))
+
+(defun place->lock-lookup (place)
+  (cond
+    ((= 2 (length place))
+     (destructuring-bind (fn-name obj) place
+       (let ((method-var (gensym "method")))
+         `(lwhen (,method-var (standard-writer-method-for-obj-p
+                               '(setf ,fn-name) ,obj))
+            (prevalence-slot-locks
+             (class-of ,obj)
+             (list (c2mop:accessor-method-slot-definition
+                    ,method-var)))))))
+    ((and (= 3 (length place))
+          (eq (car place) 'slot-value))
+     (destructuring-bind (fn-name obj slot-name) place
+       (declare (ignore fn-name))
+       `(prevalence-slot-locks
+         (class-of ,obj)
+         (list (slot-by-name (class-of ,obj) ,slot-name)))))
+    ((and (= 4 (length place))
+          (eq (car place) 'c2mop:slot-value-using-class))
+     (destructuring-bind (fn-name class obj slot-name) place
+       (declare (ignore fn-name obj))
+       `(prevalence-slot-locks
+         ,class
+         (list (slot-by-name ,class ,slot-name)))))))
+
 (defmacro multi-setf (&rest pairs)
   (assert (evenp (length pairs)) (pairs) "setf (and multi-setf) operates on pairs, but PAIRS was odd length")
-  ;; TODO: Extract locks
   (let* ((return-var (gensym "return"))
          (digested-pairs
            (loop for (place values) on pairs by #'cddr
@@ -51,7 +88,7 @@ See PREVALENCE-CLASS for documentation on slot-specifier options."
        (as-transaction
            (,@actions)
          ;; We serialize through letting the individual setfs serialize.
-         ;; This is transactive modulo interrupts like the lisp dying.
+         ;; This is transactive modulo interrupts (and dying).
          (values-list ,return-var)))))
 
 (defun delete-object (obj)
