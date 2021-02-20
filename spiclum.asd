@@ -5,7 +5,6 @@
   :version "-1.0"
   :author "arthev"
   :depends-on (:bordeaux-threads
-               :fiveam
                :closer-mop
                :cl-fad)
   :serial t
@@ -18,9 +17,4 @@
                (:file "src/serialization")
                (:file "src/prevalence-class")
                (:file "src/prevalence-object")
-               (:file "src/interface")
-               (:file "src/test/fixtures")
-               (:file "src/test/mop-methods")
-               (:file "src/test/serialization-tests")
-               (:file "src/test/query-tests")
-               (:file "src/test/integration")))
+               (:file "src/interface")))
