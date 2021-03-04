@@ -147,7 +147,6 @@ acceptable-persistent-slot-value-type-p."))
   state)
 
 (defmethod serialize-object ((list list))
-  ;: TODO: Handle circularity
   ;; See the following link for discussion on different list types that need special handling:
   ;; https://stackoverflow.com/questions/60247877/check-for-proper-list-in-common-lisp
   (cond ((null list) nil)

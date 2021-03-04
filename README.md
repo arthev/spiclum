@@ -1,6 +1,6 @@
 # SPICLUM
 
-System Prevalence In Common Lisp Using MOP, pronounced however spiculum's pronounced. In case you'd like to disregard the collective wisdom of roughly sixty years of database usage, and instead keep an object store in memory, serialize to and from text files, and rely on as much automagic as possible.
+System Prevalence In Common Lisp Using MOP, pronounced however spiculum's pronounced. In case you'd like to disregard the collective wisdom of roughly sixty years of database usage, and instead keep an object store in memory, serialize to and from text files, and rely on as much automagic as possible. Might be SPICLUM's less of a prevalence system and more of a persistent object store, given that transactions are implicit rather than explicit.
 
 ## Example
 
@@ -145,6 +145,18 @@ In addition, the slots of instances of `prevalence-class` are instances of `keya
 ###### class: prevalence-object
 
 Superclass for all prevalence-objects. Some of the intercessory methods necessary for SPICLUM's automagic (e.g. `change-class`) didn't specialize on the metaclass, hence the necessity of this superclass instead. `prevalence-object` also defines some slots used by the object-store.
+
+###### macro: multi-setf ((&key locks indirects) &body pairs)
+
+Macro to treat a whole set of pairs as an atomic operation. `pairs` is as for setf. `locks` is a list of locks. `indirects` is a list of recognizable slot accesses for slots for slots that should be part of the atomic operation, but which are only used in the `newvalue` of the `pairs` (directly or indirectly through function calls).
+
+Recognizable slot accesses are: `(slot-accessor object)`, `(slot-value object slot-name)`, and `(slot-value-using-class class object slotd)`. These are also the slot accesses which multi-setf automatically infers from the `place`s in the `pairs`.
+
+If there's a non-local exit during the execution of multi-setf, each individual setf gets rolled back. Given the nature of these roll-backs, they will probably fail spectacularly in the presence of writer methods that set multiple slots at once, or side-effects in the `newvalue` forms of the `pairs` which affect the `place`s. Naturally, multi-setf doesn't attempt any rollback for arbitrary side-effects as part of the `newvalue` forms - only for the `place`s in the `pairs`.
+
+###### macro: multi-psetf ((&key locks indirects) &body pairs)
+
+As multi-setf, except like psetf.
 
 ###### function: call-query (&key select class strict where)
 
