@@ -5,7 +5,8 @@
            :delete-object
            :prevalence-class
            :prevalence-object
-           :multi-setf
+           :multi-setf ;requires documentation in README
+           :multi-psetf ;requires documentation in README - mention (for both) that they will probably not work "optimally" if the things that are being setfed interrelate (since then the undoing/setting to prev value will probably also interrelate etc)
 
            ;; queries
            :call-query

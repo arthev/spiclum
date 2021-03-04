@@ -1,4 +1,6 @@
 (in-package :spiclum)
+
+;;;; misc
 
 (defmacro defpclass (class-name superclasses slot-specifiers &rest class-options)
   "Programmer macro for defining prevalence classes.
@@ -14,103 +16,6 @@ See PREVALENCE-CLASS for documentation on slot-specifier options."
      ,@class-options
      (:metaclass prevalence-class)))
 
-(defun standard-writer-method-for-obj-p (name obj)
-  "Return the most specific standard-writer-method, if any.
-
-NAME names a function (potentially). E.g. '+ or '(setf some-slot).
-OBJ is an arbitrary object (for which NAME might be a writer-method)."
-  (when (and (fboundp name)
-             (typep (fdefinition name) 'c2mop:generic-function))
-    (find-if (rfix #'typep 'c2mop:standard-writer-method)
-             (c2mop::compute-applicable-methods
-              (fdefinition name)
-              (list t obj)))))
-
-(defun place->lock-lookup (place)
-  (cond
-    ((atom place) nil)
-    ((= 2 (length place))
-     (destructuring-bind (fn-name obj) place
-       (let ((method-var (gensym "method")))
-         `(lwhen (,method-var (standard-writer-method-for-obj-p
-                               '(setf ,fn-name) ,obj))
-            (prevalence-slot-locks
-             (class-of ,obj)
-             (list (c2mop:accessor-method-slot-definition
-                    ,method-var)))))))
-    ((and (= 3 (length place))
-          (eq (car place) 'slot-value))
-     (destructuring-bind (fn-name obj slot-name) place
-       (declare (ignore fn-name))
-       `(prevalence-slot-locks
-         (class-of ,obj)
-         (list (slot-by-name (class-of ,obj) ,slot-name)))))
-    ((and (= 4 (length place))
-          (eq (car place) 'c2mop:slot-value-using-class))
-     (destructuring-bind (fn-name class obj slot) place
-       (declare (ignore fn-name obj))
-       `(prevalence-slot-locks
-         ,class
-         (list (slot-by-name ,class (c2mop:slot-definition-name ,slot))))))))
-
-(defmacro multi-setf ((&key locks indirects) &body pairs)
-  "Atomically setf the places in PAIRS (given LOCKS/INDIRECTS are sufficient).
-
-PAIRS is as for SETF.
-
-INDIRECTS is a list of places that access prevalence-objects that must be atomic
-inside the MULTI-SETF. E.g. if a helper function accesses a set of slots that must
-be accessed atomically, provide those as INDIRECTS. e.g. :indirects ((slot1 obj1) ... (slotn objn)).
-
-LOCKS is a list of locks for non-prevalence-objects that are also necessary for atomic operation."
-  (assert (evenp (length pairs)) (pairs) "setf (and multi-setf) operates on pairs, but PAIRS was odd length")
-  (let* ((return-var (gensym "return"))
-         (digested-pairs
-           (loop for (place values) on pairs by #'cddr
-                 collect (list
-                          (gensym)
-                          :setf-expansion (multiple-value-list
-                                           (get-setf-expansion place))
-                          :values-form values)))
-         (actions
-           (mapcar
-            (lambda (digested-pair)
-              (destructuring-bind (gensym
-                                   &key setf-expansion values-form)
-                  digested-pair
-                (destructuring-bind (vars vals store-vars
-                                     writer-form reader-form)
-                    setf-expansion
-                  `(:do
-                    (let* ,(mapcar #'list vars vals)
-                      (setf ,gensym (multiple-value-list ,reader-form))
-                      (setf ,return-var (multiple-value-list ,values-form))
-                      (multiple-value-bind ,store-vars
-                          (values-list ,return-var)
-                        ,writer-form))
-                    :undo
-                    (let* ,(mapcar #'list vars vals)
-                      (multiple-value-bind ,store-vars (values-list ,gensym)
-                        ,writer-form))))))
-            digested-pairs))
-         (inferred-locks (loop for (place values) on pairs by #'cddr
-                               for lookup = (place->lock-lookup place)
-                               when lookup collect lookup))
-         (indirect-locks (mapcar #'place->lock-lookup indirects)))
-    (assert (every #'identity indirect-locks) (indirects)
-            "Couldn't make sense of all INDIRECTS to MULTI-SETF.~
-             See PLACE->LOCK-LOOKUP. Received: ~S" indirects)
-    `(let (;; create some gensym bindings (to nil)
-           ,@(mapcar #'car digested-pairs) ,return-var)
-       (with-recursive-locks (remove nil (append ,@inferred-locks
-                                                 ,@indirect-locks
-                                                 ,locks))
-         (as-transaction
-             (,@actions)
-           ;; We serialize through letting the individual setfs serialize.
-           ;; This is transactive modulo interrupts (and dying).
-           (values-list ,return-var))))))
-
 (defun delete-object (obj)
   "Deletes OBJ by removing it from the object-store.
 
@@ -120,6 +25,8 @@ to the deleted object."
   (check-type obj prevalence-object)
   (with-recursive-locks (all-prevalence-slot-locks-for obj)
     (prevalence-remove-instance obj)))
+
+;;;; worlds
 
 (defun save-world (&key directory name)
   "Save a new world as per DIRECTORY and NAME.
@@ -168,3 +75,144 @@ DIRECTORY and NAME are required."
     (load (log-file *prevalence-system*))
     (force-all-thunks)
     (reset-uuid-seed-for-object-store)))
+
+
+;;;; multi-setf/multi-psetf
+
+(defun standard-writer-method-for-obj-p (name obj)
+  "Return the most specific standard-writer-method, if any.
+
+NAME names a function (potentially). E.g. '+ or '(setf some-slot).
+OBJ is an arbitrary object (for which NAME might be a writer-method)."
+  (when (and (fboundp name)
+             (typep (fdefinition name) 'c2mop:generic-function))
+    (find-if (rfix #'typep 'c2mop:standard-writer-method)
+             (c2mop::compute-applicable-methods
+              (fdefinition name)
+              (list t obj)))))
+
+(defun place->lock-lookup (place)
+  (cond
+    ((atom place) nil)
+    ((= 2 (length place))
+     (destructuring-bind (fn-name obj) place
+       (let ((method-var (gensym "method")))
+         `(lwhen (,method-var (standard-writer-method-for-obj-p
+                               '(setf ,fn-name) ,obj))
+            (prevalence-slot-locks
+             (class-of ,obj)
+             (list (c2mop:accessor-method-slot-definition
+                    ,method-var)))))))
+    ((and (= 3 (length place))
+          (eq (car place) 'slot-value))
+     (destructuring-bind (fn-name obj slot-name) place
+       (declare (ignore fn-name))
+       `(prevalence-slot-locks
+         (class-of ,obj)
+         (list (slot-by-name (class-of ,obj) ,slot-name)))))
+    ((and (= 4 (length place))
+          (eq (car place) 'c2mop:slot-value-using-class))
+     (destructuring-bind (fn-name class obj slot) place
+       (declare (ignore fn-name obj))
+       `(prevalence-slot-locks
+         ,class
+         (list (slot-by-name ,class (c2mop:slot-definition-name ,slot))))))))
+
+(defun multi-p/setf-locks (locks indirects pairs)
+  (assert (evenp (length pairs)) (pairs) "p/setf (and multi-p/setf) operates on pairs, but PAIRS was odd length")
+  (let ((inferred-locks (loop for (place values) on pairs by #'cddr
+                              for lookup = (place->lock-lookup place)
+                              when lookup collect lookup))
+        (indirect-locks (mapcar #'place->lock-lookup indirects)))
+    (assert (every #'identity indirect-locks) (indirects)
+            "Couldn't make sense of all INDIRECTS to MULTI-SETF.~
+             See PLACE->LOCK-LOOKUP. Received: ~S" indirects)
+    `(remove nil (append ,@inferred-locks ,@indirect-locks ,locks))))
+
+(defmacro map-digested-pairs (&body body)
+  "Assumes DIGESTED-PAIRS is lexically bound.
+
+As a list of lists (gensym :setf-expansion (vars vals store-vars writer-form reader-form)
+                           :values-form values-form).
+Makes (gensym vars vals store-vars writer-form reader-form values-form setf-expansion) available in BODY."
+  `(mapcar (lambda (digested-pair)
+             (destructuring-bind (gensym &key setf-expansion values-form)
+                 digested-pair
+               (declare (ignorable values-form))
+               (destructuring-bind (vars vals store-vars writer-form reader-form)
+                   setf-expansion
+                 (declare (ignorable vars vals store-vars writer-form reader-form))
+                 ,@body)))
+           digested-pairs))
+
+(defmacro multi-setf ((&key locks indirects) &body pairs)
+  "Atomically setf the places in PAIRS (given LOCKS/INDIRECTS are sufficient).
+
+PAIRS is as for SETF.
+
+INDIRECTS is a list of places that access prevalence-objects that must be atomic
+inside the MULTI-SETF. E.g. if a helper function accesses a set of slots that must
+be accessed atomically, provide those as INDIRECTS. e.g. :indirects ((slot1 obj1) ... (slotn objn)).
+
+LOCKS is a list of locks for non-prevalence-objects that are also necessary for atomic operation."
+  (let* ((all-locks (multi-p/setf-locks locks indirects pairs))
+         (return-var (gensym "return"))
+         (digested-pairs
+           (loop for (place values) on pairs by #'cddr
+                 collect (list
+                          (gensym)
+                          :setf-expansion (multiple-value-list
+                                           (get-setf-expansion place))
+                          :values-form values))))
+    `(let (,@(map-digested-pairs gensym) ,return-var)
+       (with-recursive-locks ,all-locks
+         (as-transaction
+             (,@(map-digested-pairs
+                  `(:do
+                    (let* ,(mapcar #'list vars vals)
+                      (setf ,gensym (multiple-value-list ,reader-form))
+                      (setf ,return-var (multiple-value-list ,values-form))
+                      (multiple-value-bind ,store-vars
+                          (values-list ,return-var)
+                        ,writer-form))
+                    :undo
+                    (let* ,(mapcar #'list vars vals)
+                      (multiple-value-bind ,store-vars (values-list ,gensym)
+                        ,writer-form)))))
+           ;; We serialize through letting the individual setfs serialize.
+           ;; This is transactive modulo interrupts.
+           (values-list ,return-var))))))
+
+(defmacro multi-psetf ((&key locks indirects) &body pairs)
+  "As MULTI-SETF except psetf-like instead of setf-like."
+  (let* ((all-locks (multi-p/setf-locks locks indirects pairs))
+         (digested-pairs
+           (loop for (place values) on pairs by #'cddr
+                 collect (list
+                          (gensym)
+                          :setf-expansion (multiple-value-list
+                                           (get-setf-expansion place))
+                          :values-form values))))
+    `(let (,@(map-digested-pairs gensym))
+       (with-recursive-locks ,all-locks
+         ,@(map-digested-pairs
+             `(setf (getf ,gensym :old)
+                    (let* ,(mapcar #'list vars vals)
+                      (multiple-value-list ,reader-form))))
+         ,@(map-digested-pairs
+             `(setf (getf ,gensym :new)
+                    (multiple-value-list ,values-form)))
+         (as-transaction
+             ((:do nil :undo (progn
+                               ,@(map-digested-pairs
+                                   `(let* ,(mapcar #'list vars vals)
+                                      (multiple-value-bind ,store-vars
+                                          (values-list (getf ,gensym :old))
+                                        ,writer-form)))))
+              (:undo nil :do (progn
+                               ,@(map-digested-pairs
+                                   `(let* ,(mapcar #'list vars vals)
+                                      (multiple-value-bind ,store-vars
+                                          (values-list (getf ,gensym :new))
+                                        ,writer-form))))))
+           nil)))))
