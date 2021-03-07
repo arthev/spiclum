@@ -9,7 +9,7 @@
          (real-prevalence-system *prevalence-system*))
     (flet ((list-files (type)
              (list-directory-for-type
-              (cl-fad:pathname-directory-pathname path)
+              (uiop/pathname:pathname-directory-pathname path)
               type)))
       (ensure-directories-exist path)
       (mapc #'uiop:delete-file-if-exists

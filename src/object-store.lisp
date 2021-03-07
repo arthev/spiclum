@@ -3,12 +3,12 @@
 ;;;; -1. pathname helpers
 
 (defun timestamped-storage-pathname (storage-path timestamp type)
-  (cl-fad:merge-pathnames-as-file
-   storage-path
+  (uiop/pathname:merge-pathnames*
    (make-pathname :name (format nil "~A-~A"
                                 (pathname-name storage-path)
                                 timestamp)
-                  :type type)))
+                  :type type)
+   storage-path))
 
 (defun most-recent-timestamped-file (directory-pathname type)
   "Returns the most recent file, as per ansi timestamp."
@@ -17,13 +17,13 @@
 
 (defun compute-timestamp (storage-path storage-timestamp)
   (if storage-timestamp
-      (progn (assert (cl-fad:file-exists-p
+      (progn (assert (uiop/filesystem:file-exists-p
                       (timestamped-storage-pathname
                        storage-path storage-timestamp *world-filename*)))
              storage-timestamp)
       (lif (most-recent-world
             (most-recent-timestamped-file
-             (cl-fad:pathname-directory-pathname storage-path)
+             (uiop/pathname:pathname-directory-pathname storage-path)
              *world-filename*))
            (subseq (pathname-name most-recent-world)
                    (1+ (length (pathname-name storage-path))))

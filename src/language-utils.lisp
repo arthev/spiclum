@@ -290,7 +290,7 @@ Accepts a timezone, but doesn't (yet?) reflect the timezone in the output."
 
 (defun list-directory-for-type (directory-pathname type)
   (remove-if (complement (lfix #'string= type))
-             (cl-fad:list-directory directory-pathname)
+             (uiop/filesystem:directory-files directory-pathname)
              :key #'pathname-type))
 
 (defmacro key-args ((&rest key-args) &rest call)

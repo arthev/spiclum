@@ -5,8 +5,7 @@
   :version "-1.0"
   :author "arthev"
   :depends-on (:bordeaux-threads
-               :closer-mop
-               :cl-fad)
+               :closer-mop)
   :serial t
   :components ((:file "src/packages")
                (:file "src/language-utils")
