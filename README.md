@@ -52,29 +52,35 @@ CL-USER> (spiclum:query :class some-class)
 (#<SOME-CLASS some-slot: 12> #<SOME-CLASS some-slot: 20>)
 ```
 
+If you're interested in some reflection about the development of SPICLUM, there's a post [here](https://abstractaway.com/publication-postmortem-spiclum-library/).
+
 ## Portability
 
 The following implementations are supported:
 
 * SBCL 2.0.2+
 
-There are only three places where reader conditionals appear, though. So the amount of work to port SPICLUM to other implementations is presumably low. But it's a presumption.
+There are only three places where reader conditionals appear, though. So the amount of work to port SPICLUM to other implementations is presumably low.
 
 ## Design
 
-SPICLUM exists because I wanted data persistence without having to fiddle with database installations/setups (for ORMs), and the existent libraries for object prevalence in Lisp seemed to require more explicit actions than I wanted. Why create transaction objects when the metaobject protocol defines actions for updating the state of objects, and we can simply make use of those *as* the transactional actions. As such, SPICLUM treats the following generic functions as transactional actions: `slot-makunbound-using-class`, `(setf slot-value-using-class)`, `make-instance`, `ensure-class-using-metaclass`, `change-class`, `reinitialize-instance`. That *should* be all normal ways to change an instance or a class.
+SPICLUM exists because I wanted data persistence without having to fiddle with database installations/setups (for ORMs), and the existent libraries for object prevalence in Lisp required more explicit actions than I wanted. Why create transaction objects when the metaobject protocol defines actions for updating the state of objects, and we can simply make use of those *as* the transactional actions? As such, SPICLUM treats the following generic functions as transactional actions: `slot-makunbound-using-class`, `(setf slot-value-using-class)`, `make-instance`, `ensure-class-using-metaclass`, `change-class`, `reinitialize-instance`. That *should* be all normal ways to change an instance or a class.
 
-Note that the above list of generic functions mentions `ensure-class-using-metaclass`, rather than `ensure-class-using-class`. I find the design of `ensure-class-using-class` deficient - there's some rambling about this [starting here](https://abstractaway.com/the-art-of-the-metaobject-protocol-and-ensure-class-using-class/). Basically, SPICLUM replaces `ensure-class-using-class` with `ensure-class-using-metaclass` which makes it possible to specialize on the metaclass (by calling `ensure-class-using-metaclass` with a prototype instance of the relevant metaclass).
+SPICLUM achieves persistence by serializing calls to the above transactional actions as code: there's a "world" file, containing the state of the world at the time the world was saved last, and then a "log" file that records changes following the world file. Hence creating a new world file compacts the required transaction replay.
 
-Since mutable values as slot-values can be updated without hitting any of the above "protocol points", ensuring all changes get transactionalized requires some more `setf`ing (of the slot-values) than would otherwise be ideal.
+Note that the above list of generic functions mentions `ensure-class-using-metaclass`, rather than `ensure-class-using-class`. I find the design of `ensure-class-using-class` deficient - there's some rambling about this [starting here](https://abstractaway.com/the-art-of-the-metaobject-protocol-and-ensure-class-using-class/). SPICLUM replaces `ensure-class-using-class` with `ensure-class-using-metaclass` which makes it possible to specialize on the metaclass (by calling `ensure-class-using-metaclass` with a prototype instance of the relevant metaclass).
+
+There hasn't been any significant effort towards efficiency/optimization; the focus has been on appropriate behaviour. The object-store is a simple layered hash-table, not something fancy like a B+ tree.
 
 #### Undefined Behaviour, Restrictions, Limitations, etc.
 
+Since mutable values as slot-values can be updated without hitting any of the above "protocol points", ensuring all changes get transactionalized requires some more `setf`ing (of the slot-values) than would otherwise be ideal.
+
 Saving a world serializes both class definitions and instances. This is to ensure the coherency between the instantiation forms and the class definitions. To this end, class redefinitions also get committed to the transaction log.
 
-Since preserving referentiality in general would require analysing the whole world for each and every transactive action, SPICLUM doesn't preserve general referentiality. It *does* preserve referentiality between prevalence-objects themselves, though. (So e.g. two prevalence-objects that both hold references to a list will, when the world is reloaded, each refer to a distinct list with similar elements instead.)
+Since preserving referentiality in general would require analysing the whole world for each and every transaction, SPICLUM doesn't preserve general referentiality. (So e.g. two prevalence-objects that both hold references to a list will, when the world is reloaded, each refer to a distinct list with similar elements instead.) It *does* preserve referentiality between prevalence-objects themselves, though.
 
-If a subclass of prevalence-object takes other initargs than those that match its slot definitions, the application programmer must supply a custom serialization method for that class.
+If a subclass of prevalence-object takes other initargs than those that match its slot definitions, the application programmer must supply a custom serialization method for that class. (or lose out on the extra initargs.)
 
 A programmer calling make-instances-obsolete on a prevalence-class is undefined behaviour. (The calls that happen through defclass or ensure-class-using-metaclass are well-defined.)
 
@@ -94,23 +100,23 @@ Deleting prevalence-objects is given a single interface - `delete-object` - whic
 
 Not all types of slot-values (or indirect values e.g. elements of hash-tables, lists, etc.) are supported for prevalence-objects (but note that support can be added by writing appropriate serialize-object methods):
 
-* Anonymous classes - can't locate class objects (and using names for keys becomes tricky)
+* Anonymous classes - can't locate class objects (and internal key use becomes tricky)
 * Displaced arrays - we'd need to analyze the whole world to keep track of them
 * Circular data (although circular relations between prevalence-objects *is* supported)
-* CLOS instances which aren't prevalence-objects - because of the lack of general referentiality
+* CLOS instances which aren't prevalence-objects - lack of general referentiality
 * Closures - no portable access to source code or lexical environment
-* Conditions - same general problem as structs
-* Functions (named) - no good portable way to access names of functions, AFAIK. Have a look at the lax requirements of `function-lambda-expression`.
-* Packages - not investigated yet, but not implemented
-* Pathnames - should be decently straightforward, but not implemented
-* Readtables - they contain functions
-* Streams - not investigated yet, but not implemented
-* Structs - they have terrible (portable) introspection
+* Conditions - same problem as structs
+* Functions (named) - no good portable way to access names of functions, AFAIK (compare `function-lambda-expression`)
+* Packages - not investigated yet; not implemented
+* Pathnames - should be decently straightforward; not implemented
+* Readtables - contain functions, so inherit their problems
+* Streams - not investigated yet; not implemented
+* Structs - have terrible (portable) introspection
 
 
 #### Assorted Observations
 
-SPICLUM uses bordeaux-threads since it seems to be the de-facto standard. At the time of implementation, I found two downsides to bordeaux-threads: 1) No way to portably access the name of a lock 2) `acquire-recursive-lock` wasn't supported for SBCL. There's a (short) bordeaux-threads section in language-utils.lisp.
+SPICLUM uses bordeaux-threads since it seems to be the de-facto standard. At the time of implementation, I found two downsides to bordeaux-threads: 1) No way to portably access the name of a lock 2) `acquire-recursive-lock` wasn't supported for SBCL.
 
 SPICLUM has no support for distributed systems.
 
@@ -120,7 +126,7 @@ From source. E.g. clone the repo and place the folder in your local quicklisp se
 
 ## License
 
-... [TODO]
+MIT License.
 
 ## Documentation
 

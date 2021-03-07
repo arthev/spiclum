@@ -2,7 +2,7 @@
 
 (asdf:defsystem :spiclum
   :description "System Prevalence in Common Lisp using MOP"
-  :version "-1.0"
+  :version "0.0"
   :author "arthev"
   :depends-on (:bordeaux-threads
                :closer-mop)

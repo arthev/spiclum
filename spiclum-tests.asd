@@ -2,7 +2,7 @@
 
 (asdf:defsystem :spiclum-tests
   :description "Tests for SPICLUM"
-  :version "-1.0"
+  :version "0.0"
   :author "arthev"
   :depends-on (:spiclum
                :cl-mock
