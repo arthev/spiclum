@@ -36,8 +36,8 @@
    :accessor breach-object))
   (:report
    (lambda (condition stream)
-     (format stream "Tried to remove object ~S, for class ~S, slot(s) ~S, value(s) ~S,~% ~
-                     but couldn't find an entry"
+     (format stream "Tried to remove object ~S, for class ~S, slot(s) ~S, value(s) ~S,~%
+but couldn't find an entry"
              (breach-object condition) (breach-class condition)
              (breach-slots   condition) (breach-values condition))))
   (:documentation

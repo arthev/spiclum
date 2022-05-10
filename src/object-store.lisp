@@ -44,8 +44,7 @@
                        :direction :output
                        :if-exists :append
                        :if-does-not-exist :create)
-    (format out "~%;; PREVALENCE-SYSTEM targetting this ~
-                 log initialized at ~A~%"
+    (format out "~%;; PREVALENCE-SYSTEM targetting this log initialized at ~A~%"
             (ANSI-time)))
   ;; Create an empty world file if none exists
   (with-open-file (out (world-file instance)
