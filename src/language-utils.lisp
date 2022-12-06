@@ -2,6 +2,8 @@
 
 ;;;; -1. assorted lisp utils
 
+(defun windows-p ()
+  (string= "Win32" (software-type)))
 
 (defmacro prog1-let ((var form) &body body)
   `(let ((,var ,form))

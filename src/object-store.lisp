@@ -31,12 +31,21 @@
 
 (defun update-prevalence-system-for-timestamp (instance timestamp)
   (with-accessors ((storage-path storage-path)) instance
-    (setf (storage-timestamp instance)
-          timestamp
-          (world-file instance)
-          (timestamped-storage-pathname storage-path timestamp *world-filename*)
-          (log-file instance)
-          (timestamped-storage-pathname storage-path timestamp *log-filename*))))
+    (let ((file-timestamp-string (if (windows-p)
+                                     (remove #\: timestamp)
+                                     timestamp)))
+      (setf (storage-timestamp instance)
+            timestamp
+            (world-file instance)
+            (timestamped-storage-pathname
+             storage-path
+             file-timestamp-string
+             *world-filename*)
+            (log-file instance)
+            (timestamped-storage-pathname
+             storage-path
+             file-timestamp-string
+             *log-filename*)))))
 
 (defun initialize-prevalence-system-files (instance)
   ;; Log initialization time as comment for debug convenience
