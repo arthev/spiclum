@@ -270,11 +270,13 @@ acceptable-persistent-slot-value-type-p."))
 
 (defun serialize-write (form)
   (bt:with-lock-held (*serialization-lock*)
-    (with-open-file (out (if *saving-world-p*
+    (with-open-file (out (if *saving-world-p* ; can stuff stream into a global to save on opens/closes
                              (world-file *prevalence-system*)
                              (log-file *prevalence-system*))
                          :direction :output
                          :if-exists :append
                          :if-does-not-exist :create)
       (let ((*package* (find-package :spiclum)))
-        (format out "~S~%" form)))))
+        (format out "~S~%" form)
+        ;; gives durability dependent on the lisp implementation treats  finish-output
+        (finish-output out)))))
