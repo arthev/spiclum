@@ -129,7 +129,8 @@ acceptable-persistent-slot-value-type-p."))
   number)
 
 (defmethod serialize-object ((symbol symbol))
-  (if (keywordp symbol)
+  (if (and (boundp symbol)
+           (eq symbol (symbol-value symbol)))
       symbol
       `',symbol))
 
