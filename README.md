@@ -7,7 +7,7 @@ System Prevalence In Common Lisp Using MOP, pronounced however spiculum's pronou
 ```common-lisp
 CL-USER> (ql:quickload :spiclum) ;; local quicklisp path
 (:SPICLUM)
-CL-USER> (spiclum:load-world :directory "/home/arthur/tmp" :name "spiclum-example")
+CL-USER> (spiclum:load-world :directory (user-homedir-pathname) :name "spiclum-example")
 0
 CL-USER> (spiclum:defpclass some-class ()
            ((some-slot :initarg :some-slot
@@ -33,7 +33,7 @@ CL-USER> (spiclum:query :class some-class
 CL-USER> ;; Let's do a slime-restart-inferior-lisp
 CL-USER> (ql:quickload :spiclum) ;; local quicklisp path
 (:SPICLUM)
-CL-USER> (spiclum:load-world :directory "/home/arthur/tmp" :name "spiclum-example")
+CL-USER> (spiclum:load-world :directory (user-homedir-pathname) :name "spiclum-example")
 2
 CL-USER> (find-class 'some-class)
 #<SPICLUM:PREVALENCE-CLASS COMMON-LISP-USER::SOME-CLASS>
@@ -196,7 +196,7 @@ See query-tests.lisp for some examples.
 
 ###### function: load-world (&key directory name)
 
-Loads a world and transaction log (or creates empty ones if necessary), and initializes the object-store. `directory` and `name` are required.
+Loads a world and transaction log (or creates empty ones if necessary), and initializes the object-store. `directory` and `name` are required. `name` is a string, `directory` a pathname.
 
 ###### function: save-world (&key directory name)
 

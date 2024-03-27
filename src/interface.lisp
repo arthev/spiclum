@@ -62,13 +62,15 @@ and the set of instances of prevalence-object."
   "Loads a world/transaction log (or creates empty ones).
 
 Initializes the object-store/prevalence-system.
-DIRECTORY and NAME are required."
-  ;; e.g. directory "home/arthur/spiclum-test" name "spiclum-test"
+DIRECTORY and NAME are required.
+NAME is the name for the prevalence-system, a string.
+DIRECTORY is a pathname representing the directory (and whatever else necessary) for where to store the prevalence-system."
+  ;; e.g. :directory (user-homedir-pathname) :name "spiclum-test"
   (assert (and directory name))
   (setf *prevalence-system*
         (make-instance 'prevalence-system
-                       :storage-path (make-pathname :directory directory
-                                                    :name name)))
+                       :storage-path (merge-pathnames (make-pathname :name name)
+                                                      directory)))
   (let ((*package* (find-package :spiclum))
         (*persisting-p* nil))
     (load (world-file *prevalence-system*))
