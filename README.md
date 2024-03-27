@@ -134,6 +134,10 @@ MIT License.
 
 Convenience macro that inserts the `prevalence-class` metaclass and the `prevalence-object` superclass into a defclass form. Identical to a `defclass` form, except `defpclass` doesn't accept a `:metaclass` class-option, and the slot-specifiers for `defpclass` accept a `:key` and `:equality` arg.
 
+`:KEY` must be of type `KEYABLE-SLOT-KEY`. `NIL` means the slot in question is *not* used as an index. `:UNIQUE` means it's a unique key (for all subclasses that share the slot definition). `:INDEX` means the slot is used for indexing without any uniqueness restraint. `:CLASS-UNIQUE` means the slot is a unique key, but the uniqueness restraint applies at the level of each direct class, hence different subclasses can each have an instance wih a particular unique value for the slot.
+
+`:EQUALITY` must be one of the hash-table test functions.
+
 ###### function: delete-object (obj)
 
 Accepts a prevalence-object and removes it from the object-store. Note that pruning all references to the prevalence-object in question, including from other prevalence-objects, is left to the application programmer.
