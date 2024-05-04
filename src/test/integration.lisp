@@ -3,9 +3,9 @@
 (5am:in-suite :prevalence.integration)
 
 (5am:test :save/load-world
-  (let* ((directory  "/home/arthur/spiclum-test")
+  (let* ((directory (user-homedir-pathname))
          (name "spiclum-test")
-         (path (make-pathname :directory directory :name name))
+         (path (merge-pathnames (make-pathname :name name) directory))
          (real-prevalence-system *prevalence-system*))
     (flet ((list-files (type)
              (list-directory-for-type

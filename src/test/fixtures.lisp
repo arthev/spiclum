@@ -124,8 +124,9 @@
 (defun test-prevalence-system ()
   (make-instance
    'prevalence-system
-   :storage-path (make-pathname :directory "home/arthur/spiclum-test"
-                                :name "spiclum-test")))
+   :storage-path (merge-pathnames (make-pathname :name "spiclum-test")
+                                  (user-homedir-pathname))))
+
 
 (defun check-lookup-finds-object-slotd-value-p (obj slotd value)
   (let ((using-class
