@@ -165,3 +165,30 @@ Thus, zero references to the object."
   (prog1 (call-next-method)
     ;; Force updates through accessing the slots of the affected instances.
     (mapc #'slot-values *instances-affected-by-redefinition*)))
+
+;;;; 2. Allow prevalence-classes to inherit from standard-classes
+
+(defmethod c2mop:ensure-class-using-metaclass
+    ((metaclass standard-class) class name &rest args)
+  (when (or (not *prevalence-system*)
+            (eq 'prevalence-class (getf args :metaclass)))
+    (return-from c2mop:ensure-class-using-metaclass
+      (call-next-method)))
+  (lwhen (prevalent-subclaxoosses
+          (remove-if-not (rfix #'typep 'prevalence-class)
+                         (all-subclasses (find-class name))))
+    (let* ((instances (remove-if-not (rfix #'typep 'prevalence-object)
+                                     (find-all class)))
+           (slot->value-maps (mapcar #'slot->value-map instances))
+           (*instances-affected-by-redefinition* instances))
+      (as-transaction
+          ( ;; CLASS (being non-nil) should be the return value of CALL-NEXT-METHOD
+           (:do (with-ignored-prevalence (call-next-method))
+            :undo (with-ignored-prevalence
+                    (apply #'call-next-method metaclass class
+                           (last-class-definition name))
+                    (mapc #'update-instance-for-slot->value-map
+                          instances slot->value-maps))))
+        (key-args (name args) serialize :ensure-class-using-metaclass)
+        (register-last-class-definition name args)
+        class))))

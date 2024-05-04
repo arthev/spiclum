@@ -40,3 +40,11 @@ portable programs must not define methods on shared-initialize or
 reinitialize-instance for slot definition metaobjects."
   (check-type key keyable-slot-key)
   (assert (not (and (eq :class allocation) key))))
+
+;; 1. To enable a persistent object to also inherit from non-persistent ones...
+
+(defmethod key (c2mop:standard-direct-slot-definition)
+  nil)
+
+(defmethod equality (c2mop:standard-direct-slot-definition)
+  #'eql)
