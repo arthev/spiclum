@@ -12,7 +12,7 @@ Prevalence-class's slot-specifiers accept :KEY and :EQUALITY args.
 
 ;;;; -1. Helpers
 
-(defmacro with-ignored-prevalence (&rest body)
+(defmacro with-ignored-prevalence (&body body)
   `(let ((*persisting-p* nil)
          (*prevalencing-p* nil))
      ,@body))
@@ -171,24 +171,26 @@ Thus, zero references to the object."
 (defmethod c2mop:ensure-class-using-metaclass
     ((metaclass standard-class) class name &rest args)
   (when (or (not *prevalence-system*)
+            ;; If it's a prevalence-class, we're already handling things
             (eq 'prevalence-class (getf args :metaclass)))
     (return-from c2mop:ensure-class-using-metaclass
       (call-next-method)))
-  (lwhen (prevalent-subclaxoosses
-          (remove-if-not (rfix #'typep 'prevalence-class)
-                         (all-subclasses (find-class name))))
-    (let* ((instances (remove-if-not (rfix #'typep 'prevalence-object)
-                                     (find-all class)))
-           (slot->value-maps (mapcar #'slot->value-map instances))
-           (*instances-affected-by-redefinition* instances))
-      (as-transaction
-          ( ;; CLASS (being non-nil) should be the return value of CALL-NEXT-METHOD
-           (:do (with-ignored-prevalence (call-next-method))
-            :undo (with-ignored-prevalence
-                    (apply #'call-next-method metaclass class
-                           (last-class-definition name))
-                    (mapc #'update-instance-for-slot->value-map
-                          instances slot->value-maps))))
-        (key-args (name args) serialize :ensure-class-using-metaclass)
-        (register-last-class-definition name args)
-        class))))
+  (if (remove-if-not (rfix #'typep 'prevalence-class) ; Any subclasses of CLASS that are prevalence-classes?
+                     (when class
+                       (all-subclasses class)))
+      (let* ((instances (remove-if-not (rfix #'typep 'prevalence-object)
+                                       (find-all class)))
+             (slot->value-maps (mapcar #'slot->value-map instances))
+             (*instances-affected-by-redefinition* instances))
+        (as-transaction
+            ( ;; CLASS (being non-nil) should be the return value of CALL-NEXT-METHOD
+             (:do (with-ignored-prevalence (call-next-method))
+              :undo (with-ignored-prevalence
+                      (apply #'call-next-method metaclass class
+                             (last-class-definition name))
+                      (mapc #'update-instance-for-slot->value-map
+                            instances slot->value-maps))))
+          (key-args (name args) serialize :ensure-class-using-metaclass)
+          (register-last-class-definition name args)
+          class))
+      (call-next-method)))
