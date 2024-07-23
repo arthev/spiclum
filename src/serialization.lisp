@@ -26,6 +26,15 @@
 
 (defgeneric force (object))
 
+(defvar *thunk-table* (make-hash-table))
+
+(defmethod force :around (object)
+  (if (gethash object *thunk-table*)
+      'recursive-exit
+      (prog2 (setf (gethash object *thunk-table*) object)
+          (call-next-method)
+        (remhash object *thunk-table*))))
+
 (defmethod force (object)
   object)
 
