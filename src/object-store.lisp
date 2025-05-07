@@ -10,9 +10,12 @@
                   :type type)
    storage-path))
 
-(defun most-recent-timestamped-file (directory-pathname type)
+(defun most-recent-timestamped-file (directory-pathname pathname-name type)
   "Returns the most recent file, as per ansi timestamp."
-  (car (sort (list-directory-for-type directory-pathname type)
+  (car (sort (remove-if-not
+              (lfix #'search pathname-name)
+              (list-directory-for-type directory-pathname type)
+              :key #'pathname-name)
              #'string-greaterp :key #'pathname-name)))
 
 (defun compute-timestamp (storage-path storage-timestamp)
@@ -24,6 +27,7 @@
       (lif (most-recent-world
             (most-recent-timestamped-file
              (uiop/pathname:pathname-directory-pathname storage-path)
+             (pathname-name storage-path)
              *world-filename*))
            (subseq (pathname-name most-recent-world)
                    (1+ (length (pathname-name storage-path))))
