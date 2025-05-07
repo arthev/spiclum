@@ -30,7 +30,10 @@
 
 (defmethod force :around (object)
   (if (gethash object *thunk-table*)
-      'recursive-exit
+      (if (typep object 'thunk)
+          (with-slots (value) object
+            value)
+          object)
       (prog2 (setf (gethash object *thunk-table*) object)
           (call-next-method)
         (remhash object *thunk-table*))))
@@ -44,7 +47,8 @@
 (defmethod force ((thunk thunk))
   (with-slots (value %forced-p) thunk
     (unless %forced-p
-      (setf value (force (funcall value))
+      (setf value (funcall value)
+            value (force value)
             %forced-p t))
     (force value)))
 
